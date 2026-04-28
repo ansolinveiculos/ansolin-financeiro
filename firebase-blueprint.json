@@ -1,0 +1,54 @@
+{
+  "entities": {
+    "Proposal": {
+      "title": "Proposal",
+      "description": "A credit financing proposal for a vehicle purchase.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "carModel": { "type": "string" },
+        "carYear": { "type": "integer" },
+        "carPrice": { "type": "number" },
+        "downPayment": { "type": "number" },
+        "installmentCount": { "type": "integer" },
+        "installmentValue": { "type": "number" },
+        "interestRate": { "type": "number" },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "pending", "approved", "rejected", "completed"]
+        },
+        "notes": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerId", "carModel", "carPrice", "downPayment", "status", "userId", "createdAt", "updatedAt"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "A potential vehicle buyer.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "cpf": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "cpf", "createdAt"]
+    }
+  },
+  "firestore": {
+    "proposals": {
+      "schema": "Proposal",
+      "description": "Collection of financing proposals."
+    },
+    "customers": {
+      "schema": "Customer",
+      "description": "Collection of customer records."
+    }
+  }
+}
