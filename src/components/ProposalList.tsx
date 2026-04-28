@@ -29,8 +29,7 @@ import {
   User as UserIcon,
   Car,
   Trash2,
-  Minus,
-  Plus
+  Minus
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -715,8 +714,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                     <table className="w-full text-left border-collapse table-fixed min-w-[340px]">
                       <thead>
                         <tr className="text-[14px] font-bold uppercase text-slate-400 border-b border-slate-50 bg-slate-50/50">
-                          <th className="py-2 pl-3 w-[30px]">Nº</th>
-                          <th className="py-2 w-[100px]">Vcto</th>
+                          <th className="py-2 pl-3 w-[130px]">Nº - Vcto</th>
                           <th className="py-2 w-[110px]">Valor</th>
                           <th className="py-2 pr-3 text-center w-[40px]">Status</th>
                           <th className="py-2 pr-3 text-center w-[40px]">Ação</th>
@@ -736,8 +734,8 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
 
                           return (
                             <tr key={inst.id} className={cn("text-[14px] font-normal transition-colors group", rowColor)}>
-                              <td className="py-2.5 pl-3 font-bold">{String(inst.number).padStart(2, '0')}</td>
-                              <td className="py-2.5">
+                              <td className="py-2.5 pl-3 font-bold flex items-center gap-2">
+                                {String(inst.number).padStart(2, '0')} <span>-</span>
                                 <div className="relative group/date">
                                   <span className="block hover:underline decoration-dotted cursor-pointer">
                                     {safeFormat(inst.dueDate, 'dd/MM/yyyy')}
