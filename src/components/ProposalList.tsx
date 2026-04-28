@@ -435,14 +435,53 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                       <h2 className="text-xl font-black">{selectedSale.customerName}</h2>
                     </div>
                     
-                    <div className="space-y-3 pt-2">
+                    <div className="space-y-4 pt-2">
                       <div>
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Valor Parcelado</p>
-                        <p className="text-sm font-bold">{((selectedSale.installmentCount * selectedSale.installmentValue) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-tight">Valor Parcelado</p>
+                        <p className="text-lg font-black tracking-tight leading-none pt-0.5">{((selectedSale.installmentCount * selectedSale.installmentValue) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                       </div>
-                      <div>
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Parcelas</p>
-                        <p className="text-sm font-bold">{selectedSale.installmentCount}x {(selectedSale.installmentValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+
+                      <div className="grid grid-cols-1 gap-2 border-t border-white/5 pt-3">
+                        {(() => {
+                          const insts = selectedSale.installments || [];
+                          const today = new Date();
+                          today.setHours(0,0,0,0);
+
+                          const paid = insts.filter(i => i.status === 'paid');
+                          const overdue = insts.filter(i => {
+                            const date = new Date(i.dueDate);
+                            date.setHours(0,0,0,0);
+                            return i.status !== 'paid' && date < today;
+                          });
+                          const pending = insts.filter(i => {
+                            const date = new Date(i.dueDate);
+                            date.setHours(0,0,0,0);
+                            return i.status !== 'paid' && date >= today;
+                          });
+
+                          return (
+                            <>
+                              <div>
+                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Parcelas Pagas</p>
+                                <p className="text-[11px] font-bold text-emerald-400">
+                                  {paid.length} x {(selectedSale.installmentValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Parcelas Vencidas</p>
+                                <p className="text-[11px] font-bold text-rose-400">
+                                  {overdue.length} x {(selectedSale.installmentValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Parcelas em Aberto</p>
+                                <p className="text-[11px] font-bold text-slate-300">
+                                  {pending.length} x {(selectedSale.installmentValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </p>
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
