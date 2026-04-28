@@ -66,6 +66,21 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSale, setSelectedSale] = useState<Proposal | null>(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [paymentDialog, setPaymentDialog] = useState<{
+    isOpen: boolean;
+    saleId: string | null;
+    installmentId: string | null;
+    originalValue: number;
+    paidAmount: number;
+    paymentDate: string;
+  }>({
+    isOpen: false,
+    saleId: null,
+    installmentId: null,
+    originalValue: 0,
+    paidAmount: 0,
+    paymentDate: new Date().toISOString().split('T')[0]
+  });
 
   const fetchProposals = async (force = false) => {
     if (!auth.currentUser) return;
@@ -132,32 +147,93 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
     const sale = proposals.find(p => p.id === saleId);
     if (!sale || !sale.installments) return;
 
-    const updatedInstallments = sale.installments.map(inst => {
-      if (inst.id === installmentId) {
-        const newStatus = inst.status === 'paid' ? 'pending' : 'paid';
+    const inst = sale.installments.find(i => i.id === installmentId);
+    if (!inst) return;
+
+    if (inst.status === 'pending') {
+      // Open modal for payment details
+      setPaymentDialog({
+        isOpen: true,
+        saleId,
+        installmentId,
+        originalValue: inst.value,
+        paidAmount: inst.value,
+        paymentDate: new Date().toISOString().split('T')[0]
+      });
+      return;
+    }
+
+    // Toggle back to pending
+    const updatedInstallments = sale.installments.map(i => {
+      if (i.id === installmentId) {
         return { 
-          ...inst, 
-          status: newStatus,
-          paidAt: newStatus === 'paid' ? (inst.paidAt || new Date().toISOString()) : null
+          ...i, 
+          status: 'pending',
+          paidAt: null,
+          paidAmount: undefined,
+          interest: undefined
         } as Installment;
       }
-      return inst;
+      return i;
     });
 
-    // Update locally
+    await persistInstallmentUpdate(saleId, updatedInstallments);
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!paymentDialog.saleId || !paymentDialog.installmentId) return;
+
+    const sale = proposals.find(p => p.id === paymentDialog.saleId);
+    if (!sale || !sale.installments) return;
+
+    const paidAt = new Date(paymentDialog.paymentDate + 'T12:00:00').toISOString();
+    const paidAmount = paymentDialog.paidAmount;
+    const originalValue = paymentDialog.originalValue;
+
+    let updatedInstallments = [...sale.installments];
+    const currentIndex = updatedInstallments.findIndex(i => i.id === paymentDialog.installmentId);
+    
+    if (currentIndex === -1) return;
+
+    const currentInst = updatedInstallments[currentIndex];
+    const diff = paidAmount - originalValue;
+    
+    updatedInstallments[currentIndex] = {
+      ...currentInst,
+      status: 'paid',
+      paidAt,
+      paidAmount,
+      interest: diff > 0 ? diff : 0
+    };
+
+    if (diff < 0 && currentIndex < updatedInstallments.length - 1) {
+      const nextIndex = currentIndex + 1;
+      updatedInstallments[nextIndex] = {
+        ...updatedInstallments[nextIndex],
+        value: updatedInstallments[nextIndex].value + Math.abs(diff)
+      };
+    }
+
+    setPaymentDialog(prev => ({ ...prev, isOpen: false }));
+    await persistInstallmentUpdate(paymentDialog.saleId, updatedInstallments);
+  };
+
+  const persistInstallmentUpdate = async (saleId: string, updatedInstallments: Installment[]) => {
+    const sale = proposals.find(p => p.id === saleId);
+    if (!sale) return;
+
     const updatedProposal = { ...sale, installments: updatedInstallments };
     const newProposals = proposals.map(p => p.id === saleId ? updatedProposal : p);
     setProposals(newProposals);
     localStorage.setItem('ansolin_proposals', JSON.stringify(newProposals));
     
-    // Update dashboard stats too
     const summary = newProposals.reduce((acc: any, curr: any) => {
       acc.totalVendido += (curr.carPrice || 0);
       acc.recebido += (curr.downPayment || 0);
       acc.count++;
       if (curr.installments) {
         curr.installments.forEach((inst: Installment) => {
-          if (inst.status === 'paid') acc.recebido += (inst.value || 0);
+          if (inst.status === 'paid') acc.recebido += (inst.paidAmount || inst.value || 0);
           else acc.aReceber += (inst.value || 0);
         });
       }
@@ -177,7 +253,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
     } catch (error) {
       console.error('Error updating installment:', error);
       toast.error('Erro ao salvar alteração.');
-      fetchProposals(true); // Revert
+      fetchProposals(true);
     }
   };
 
@@ -507,11 +583,10 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                     <table className="w-full text-left border-collapse table-fixed min-w-[340px]">
                       <thead>
                         <tr className="text-[8px] font-black uppercase text-slate-400 border-b border-slate-50 bg-slate-50/50">
-                          <th className="py-2 pl-3 w-[35px]">Parc</th>
-                          <th className="py-2 w-[85px]">Vencimento</th>
-                          <th className="py-2 w-[85px]">Pagamento</th>
-                          <th className="py-2 w-[85px]">Valor</th>
-                          <th className="py-2 pr-3 text-center w-[50px]">Status</th>
+                          <th className="py-2 pl-3 w-[30px]">Nº</th>
+                          <th className="py-2 w-[100px]">Vcto</th>
+                          <th className="py-2 w-[110px]">Valor</th>
+                          <th className="py-2 pr-3 text-center w-[40px]">Status</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -535,20 +610,6 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                                   value={inst.dueDate ? new Date(inst.dueDate).toISOString().split('T')[0] : ''} 
                                   className="bg-transparent border-none p-0 focus:ring-0 w-full text-inherit font-inherit cursor-pointer hover:underline decoration-dotted"
                                   onChange={(e) => updateInstallmentField(selectedSale.id, inst.id, 'dueDate', new Date(e.target.value + 'T12:00:00').toISOString())}
-                                />
-                              </td>
-                              <td className="py-2.5">
-                                <input 
-                                  type="date" 
-                                  value={inst.paidAt ? new Date(inst.paidAt).toISOString().split('T')[0] : ''} 
-                                  className={cn(
-                                    "bg-transparent border-none p-0 focus:ring-0 w-full text-inherit font-inherit cursor-pointer hover:underline decoration-dotted",
-                                    !inst.paidAt && "text-slate-200"
-                                  )}
-                                  onChange={(e) => {
-                                    const val = e.target.value ? new Date(e.target.value + 'T12:00:00').toISOString() : null;
-                                    updateInstallmentField(selectedSale.id, inst.id, 'paidAt', val);
-                                  }}
                                 />
                               </td>
                               <td className="py-2.5">
@@ -618,6 +679,57 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={paymentDialog.isOpen} onOpenChange={(open) => setPaymentDialog(prev => ({ ...prev, isOpen: open }))}>
+        <DialogContent className="max-w-sm rounded-3xl p-6 border-none shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black tracking-tight mb-4">Informar Pagamento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">Data do Pagamento</p>
+              <Input 
+                type="date" 
+                value={paymentDialog.paymentDate}
+                onChange={e => setPaymentDialog(prev => ({ ...prev, paymentDate: e.target.value }))}
+                className="h-11 rounded-xl bg-slate-50 border-slate-100"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">Valor Pago</p>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                <Input 
+                  type="number" 
+                  step="0.01"
+                  value={paymentDialog.paidAmount}
+                  onChange={e => setPaymentDialog(prev => ({ ...prev, paidAmount: Number(e.target.value) }))}
+                  className="h-11 pl-9 rounded-xl bg-slate-50 border-slate-100 font-bold"
+                />
+              </div>
+              <p className="text-[9px] text-slate-400 font-medium">
+                Valor da parcela: {paymentDialog.originalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+            </div>
+            
+            <div className="pt-2 flex flex-col gap-2">
+              <Button 
+                onClick={handleConfirmPayment}
+                className="h-11 rounded-2xl font-bold bg-slate-900 hover:bg-slate-800 text-white"
+              >
+                Confirmar Recebimento
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setPaymentDialog(prev => ({ ...prev, isOpen: false }))}
+                className="h-11 rounded-2xl font-bold border-slate-200"
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

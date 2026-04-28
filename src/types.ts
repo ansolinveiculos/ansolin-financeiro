@@ -11,6 +11,8 @@ export interface Installment {
   number: number;
   dueDate: string;
   paidAt?: string | null;
+  paidAmount?: number;
+  interest?: number;
   value: number;
   status: 'pending' | 'paid';
 }
