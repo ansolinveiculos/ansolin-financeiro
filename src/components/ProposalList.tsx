@@ -314,7 +314,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
           })}
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-xl font-black text-white/90 font-mono tracking-tighter">{paid}/{total}</span>
+          <span className="text-[32px] font-black text-white/90 font-mono tracking-tighter">{paid}/{total}</span>
         </div>
       </div>
     );
@@ -469,20 +469,20 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                           return (
                             <>
                               <div>
-                                <p className="text-[16px] text-white font-black uppercase tracking-widest leading-tight">Pagas</p>
-                                <p className="text-[16px] font-black text-emerald-400 leading-none pt-1">
+                                <p className="text-[14px] text-white font-normal uppercase tracking-widest leading-tight">Pagas</p>
+                                <p className="text-[14px] font-normal text-emerald-400 leading-none pt-1">
                                   {paid.length} = {sum(paid)}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[16px] text-white font-black uppercase tracking-widest leading-tight">Em Atraso</p>
-                                <p className="text-[16px] font-black text-rose-400 leading-none pt-1">
+                                <p className="text-[14px] text-white font-normal uppercase tracking-widest leading-tight">Em Atraso</p>
+                                <p className="text-[14px] font-normal text-rose-400 leading-none pt-1">
                                   {overdue.length} = {sum(overdue)}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[16px] text-white font-black uppercase tracking-widest leading-tight">A Vencer</p>
-                                <p className="text-[16px] font-black text-slate-300 leading-none pt-1">
+                                <p className="text-[14px] text-white font-normal uppercase tracking-widest leading-tight">A Vencer</p>
+                                <p className="text-[14px] font-normal text-slate-300 leading-none pt-1">
                                   {pending.length} = {sum(pending)}
                                 </p>
                               </div>
