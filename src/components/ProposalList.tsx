@@ -7,7 +7,8 @@ import {
   orderBy, 
   updateDoc, 
   doc, 
-  serverTimestamp 
+  serverTimestamp,
+  onSnapshot
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Proposal, ProposalStatus, Installment } from '../types';
@@ -66,37 +67,55 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
     try {
       let q = query(
         collection(db, 'proposals'),
-        where('userId', '==', auth.currentUser.uid),
-        orderBy('createdAt', 'desc')
+        where('userId', '==', auth.currentUser.uid)
       );
       
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map(doc => {
-        const d = doc.data();
-        return {
-          id: doc.id,
-          ...d,
-          createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toISOString() : new Date().toISOString(),
-          updatedAt: d.updatedAt?.toDate ? d.updatedAt.toDate().toISOString() : new Date().toISOString()
-        };
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        if (snapshot.empty && proposals.length > 0 && snapshot.metadata.fromCache) {
+          return;
+        }
+
+        const data = snapshot.docs.map(doc => {
+          const d = doc.data();
+          return {
+            id: doc.id,
+            ...d,
+            createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toISOString() : new Date().toISOString(),
+            updatedAt: d.updatedAt?.toDate ? d.updatedAt.toDate().toISOString() : new Date().toISOString()
+          };
+        });
+        
+        const sortedData = data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        if (!snapshot.empty || !snapshot.metadata.fromCache) {
+          localStorage.setItem('ansolin_proposals', JSON.stringify(sortedData));
+          setProposals(sortedData.map((p: any) => ({
+            ...p,
+            createdAt: new Date(p.createdAt),
+            updatedAt: new Date(p.updatedAt)
+          })) as any);
+        }
+        setLoading(false);
+      }, (error) => {
+        console.error('Error fetching proposals:', error);
+        setLoading(false);
       });
-      
-      localStorage.setItem('ansolin_proposals', JSON.stringify(data));
-      setProposals(data.map((p: any) => ({
-        ...p,
-        createdAt: new Date(p.createdAt),
-        updatedAt: new Date(p.updatedAt)
-      })) as any);
+
+      return unsubscribe;
     } catch (error) {
-      console.error('Error fetching proposals:', error);
-      toast.error('Erro ao carregar vendas.');
-    } finally {
+      console.error('Error setting up snapshot:', error);
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchProposals();
+    let unsubscribe: any;
+    fetchProposals().then(unsub => {
+      unsubscribe = unsub;
+    });
+    return () => {
+      if (unsubscribe) unsubscribe();
+    }
   }, []);
 
   const toggleInstallmentStatus = async (saleId: string, installmentId: string) => {
@@ -111,7 +130,25 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
 
     // Update locally
     const updatedProposal = { ...sale, installments: updatedInstallments };
-    setProposals(prev => prev.map(p => p.id === saleId ? updatedProposal : p));
+    const newProposals = proposals.map(p => p.id === saleId ? updatedProposal : p);
+    setProposals(newProposals);
+    localStorage.setItem('ansolin_proposals', JSON.stringify(newProposals));
+    
+    // Update dashboard stats too
+    const summary = newProposals.reduce((acc: any, curr: any) => {
+      acc.totalVendido += (curr.carPrice || 0);
+      acc.recebido += (curr.downPayment || 0);
+      acc.count++;
+      if (curr.installments) {
+        curr.installments.forEach((inst: Installment) => {
+          if (inst.status === 'paid') acc.recebido += (inst.value || 0);
+          else acc.aReceber += (inst.value || 0);
+        });
+      }
+      return acc;
+    }, { recebido: 0, aReceber: 0, totalVendido: 0, count: 0 });
+    localStorage.setItem('ansolin_stats', JSON.stringify(summary));
+
     if (selectedSale?.id === saleId) setSelectedSale(updatedProposal);
 
     try {

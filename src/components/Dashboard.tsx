@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Proposal, ProposalStatus, Installment } from '../types';
 import { 
@@ -51,49 +51,59 @@ export function Dashboard({ onNewProposal }: DashboardProps) {
           collection(db, 'proposals'),
           where('userId', '==', auth.currentUser.uid)
         );
-        const snapshot = await getDocs(q);
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
         
-        const summary = data.reduce((acc, curr) => {
-          acc.totalVendido += (curr.carPrice || 0);
-          acc.recebido += (curr.downPayment || 0);
-          acc.count++;
-          
-          if (curr.installments) {
-            curr.installments.forEach((inst: Installment) => {
-              if (inst.status === 'paid') acc.recebido += (inst.value || 0);
-              else acc.aReceber += (inst.value || 0);
-            });
+        const unsubscribeStats = onSnapshot(q, (snapshot) => {
+          if (snapshot.empty && stats.count > 0 && snapshot.metadata.fromCache) {
+            // Ignore empty cache if we have local stats to prevent wipe before error
+            return;
           }
-          return acc;
-        }, { recebido: 0, aReceber: 0, totalVendido: 0, count: 0 });
+          
+          const data = snapshot.docs.map(doc => {
+            const d = doc.data();
+            return {
+              id: doc.id,
+              ...d,
+              createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toISOString() : new Date().toISOString(),
+              updatedAt: d.updatedAt?.toDate ? d.updatedAt.toDate().toISOString() : new Date().toISOString()
+            };
+          });
+          
+          const summary = data.reduce((acc, curr: any) => {
+            acc.totalVendido += (curr.carPrice || 0);
+            acc.recebido += (curr.downPayment || 0);
+            acc.count++;
+            
+            if (curr.installments) {
+              curr.installments.forEach((inst: Installment) => {
+                if (inst.status === 'paid') acc.recebido += (inst.value || 0);
+                else acc.aReceber += (inst.value || 0);
+              });
+            }
+            return acc;
+          }, { recebido: 0, aReceber: 0, totalVendido: 0, count: 0 });
 
-        setStats(summary);
-        localStorage.setItem('ansolin_stats', JSON.stringify(summary));
+          // Sort data for recent sales descending
+          const sortedData = [...data].sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime());
+          const recent = sortedData.slice(0, 5);
 
-        // Fetch recent
-        const recentQ = query(
-          collection(db, 'proposals'),
-          where('userId', '==', auth.currentUser.uid),
-          orderBy('createdAt', 'desc'),
-          limit(5)
-        );
-        const recentSnapshot = await getDocs(recentQ);
-      const recent = recentSnapshot.docs.map(doc => {
-        const d = doc.data();
-        return {
-          id: doc.id,
-          ...d,
-          createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toISOString() : new Date().toISOString(),
-          updatedAt: d.updatedAt?.toDate ? d.updatedAt.toDate().toISOString() : new Date().toISOString()
+          // Only overwrite if we actually got something, or if it's genuinely empty from server
+          if (!snapshot.empty || !snapshot.metadata.fromCache) {
+            setStats(summary);
+            localStorage.setItem('ansolin_stats', JSON.stringify(summary));
+            setRecentSales(recent as any);
+            localStorage.setItem('ansolin_recent', JSON.stringify(recent));
+          }
+          setLoading(false);
+        }, (error) => {
+          console.error('Error in stats snapshot:', error);
+          setLoading(false);
+        });
+
+        return () => {
+          unsubscribeStats();
         };
-      });
-        
-        setRecentSales(recent as any);
-        localStorage.setItem('ansolin_recent', JSON.stringify(recent));
       } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-      } finally {
+        console.error('Error setting up dashboard listeners:', error);
         setLoading(false);
       }
     }

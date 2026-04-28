@@ -40,7 +40,7 @@ service cloud.firestore {
 
       allow create: if isSignedIn() && 
                       isValidProposal(request.resource.data) &&
-                      request.resource.data.createdAt is string;
+                      request.resource.data.createdAt is timestamp;
 
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
       
@@ -51,7 +51,7 @@ service cloud.firestore {
                       isValidProposal(request.resource.data) &&
                       request.resource.data.userId == resource.data.userId &&
                       request.resource.data.createdAt == resource.data.createdAt &&
-                      request.resource.data.updatedAt is string;
+                      request.resource.data.updatedAt is timestamp;
 
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }

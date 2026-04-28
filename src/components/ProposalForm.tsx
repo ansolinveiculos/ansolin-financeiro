@@ -26,6 +26,35 @@ import { ptBR } from 'date-fns/locale';
 
 import { toast } from 'sonner';
 
+const isValidCPF = (cpf: string) => {
+  cpf = cpf.replace(/[^\d]+/g, '');
+  if (cpf === '') return false;
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  
+  let add = 0;
+  for (let i = 0; i < 9; i++) add += parseInt(cpf.charAt(i)) * (10 - i);
+  let rev = 11 - (add % 11);
+  if (rev === 10 || rev === 11) rev = 0;
+  if (rev !== parseInt(cpf.charAt(9))) return false;
+  
+  add = 0;
+  for (let i = 0; i < 10; i++) add += parseInt(cpf.charAt(i)) * (11 - i);
+  rev = 11 - (add % 11);
+  if (rev === 10 || rev === 11) rev = 0;
+  if (rev !== parseInt(cpf.charAt(10))) return false;
+  
+  return true;
+};
+
+const maskCPF = (value: string) => {
+  return value
+    .replace(/\D/g, '')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+    .replace(/(-\d{2})\d+?$/, '$1');
+};
+
 interface ProposalFormProps {
   onSuccess: () => void;
   onCancel: () => void;
@@ -89,27 +118,24 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
       return;
     }
 
+    if (formData.customerCpf && formData.customerCpf.replace(/\D/g, '').length > 0) {
+      if (!isValidCPF(formData.customerCpf)) {
+        toast.error('O CPF informado é inválido. Por favor, corrija.');
+        return;
+      }
+    }
+
     setLoading(true);
     const path = 'proposals';
     console.log('Iniciando persistência no Firestore: ', path);
     console.log('Status da rede (navigator.onLine): ', navigator.onLine);
 
-    try {
-      if (auth.currentUser) {
-        console.log('Verificando sessão e obtendo token...');
-        const token = await auth.currentUser.getIdToken(true);
-        console.log('Token atualizado gerado.');
-      }
-    } catch (e) {
-      console.error('Falha ao obter token do Firebase Auth (possível bloqueio no iframe): ', e);
-    }
+    // Removendo renovação de token forçada pois pode travar no iframe
     
     // Safety timeout to prevent infinite "Saving..." state
     const timeout = setTimeout(() => {
-      if (loading) {
-        setLoading(false);
-        toast.error('O salvamento está demorando mais que o esperado. Verifique sua conexão ou tente novamente.');
-      }
+      setLoading(false);
+      toast.error('O salvamento está demorando mais que o esperado. O banco de dados pode estar indisponível.');
     }, 15000);
 
     try {
@@ -140,23 +166,52 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
 
       const newDocRef = doc(collection(db, path));
       
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('TIMEOUT_FIRESTORE')), 12000);
+      // Tentamos aguardar até 4 segundos para ver se o salvamento é imediato
+      const timeoutPromise = new Promise((resolve, reject) => {
+        setTimeout(() => resolve('TIMEOUT'), 4000);
       });
 
-      await Promise.race([
-        setDoc(newDocRef, payload),
+      const writePromise = setDoc(newDocRef, payload).catch(err => {
+        console.error('Erro de background Firestore:', err);
+        throw err;
+      });
+
+      const result = await Promise.race([
+        writePromise.then(() => 'DONE'),
         timeoutPromise
       ]);
       
       clearTimeout(timeout);
-      console.log('Documento salvo com sucesso! ID: ', newDocRef.id);
-      toast.success('Venda registrada com sucesso!');
+
+      if (result === 'TIMEOUT') {
+        toast.success('Venda salva localmente! Sincronizando em segundo plano...');
+      } else {
+        console.log('Documento salvo com sucesso! ID: ', newDocRef.id);
+        toast.success('Venda registrada com sucesso!');
+      }
       
-      // Limpa caches
-      localStorage.removeItem('ansolin_stats');
-      localStorage.removeItem('ansolin_recent');
-      localStorage.removeItem('ansolin_proposals');
+      // Update local cache completely so offline mode works perfectly
+      const cachedProposals = JSON.parse(localStorage.getItem('ansolin_proposals') || '[]');
+      const proposalWithId = { id: newDocRef.id, ...payload };
+      const newProposalsCache = [proposalWithId, ...cachedProposals];
+      localStorage.setItem('ansolin_proposals', JSON.stringify(newProposalsCache));
+      
+      const newRecent = newProposalsCache.slice(0, 5);
+      localStorage.setItem('ansolin_recent', JSON.stringify(newRecent));
+
+      const summary = newProposalsCache.reduce((acc: any, curr: any) => {
+        acc.totalVendido += (curr.carPrice || 0);
+        acc.recebido += (curr.downPayment || 0);
+        acc.count++;
+        if (curr.installments) {
+          curr.installments.forEach((inst: Installment) => {
+            if (inst.status === 'paid') acc.recebido += (inst.value || 0);
+            else acc.aReceber += (inst.value || 0);
+          });
+        }
+        return acc;
+      }, { recebido: 0, aReceber: 0, totalVendido: 0, count: 0 });
+      localStorage.setItem('ansolin_stats', JSON.stringify(summary));
 
       setTimeout(() => {
         onSuccess();
@@ -176,6 +231,9 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
   };
 
   const updateField = (field: string, value: any) => {
+    if (field === 'customerCpf') {
+      value = maskCPF(value as string);
+    }
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -218,6 +276,7 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
                 <Input 
                   id="customerCpf"
                   placeholder="000.000.000-00"
+                  maxLength={14}
                   className="h-11 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl"
                   value={formData.customerCpf}
                   onChange={e => updateField('customerCpf', e.target.value)}
