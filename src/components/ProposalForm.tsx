@@ -73,6 +73,11 @@ const isValidPhone = (phone: string) => {
   }
 };
 
+const isValidPlate = (plate: string) => {
+  const cleanPlate = plate.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  return /^[A-Z]{3}\d[A-Z0-9]\d{2}$/.test(cleanPlate);
+};
+
 interface ProposalFormProps {
   onSuccess: () => void;
   onCancel: () => void;
@@ -85,6 +90,8 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
     customerCpf: '',
     customerPhone: '',
     carModel: '',
+    carPlate: '',
+    carColor: '',
     carYear: new Date().getFullYear(),
     carPrice: 0,
     downPayment: 0,
@@ -104,7 +111,9 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
     
     // Generate installment list
     const installmentList: Installment[] = [];
-    const firstDate = new Date(formData.firstDueDate);
+    const parsedDate = new Date(formData.firstDueDate);
+    // fallback to a valid date if parsedDate is invalid (e.g. empty input)
+    const firstDate = isNaN(parsedDate.getTime()) ? addMonths(new Date(), 1) : new Date(parsedDate.getTime() + parsedDate.getTimezoneOffset() * 60000);
     
     for (let i = 1; i <= formData.installmentCount; i++) {
       installmentList.push({
@@ -151,6 +160,11 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
       }
     }
 
+    if (!isValidPlate(formData.carPlate)) {
+      toast.error('A placa informada é inválida. Use o formato antigo (AAA-1234) ou Mercosul (ABC1D23).');
+      return;
+    }
+
     setLoading(true);
     const path = 'proposals';
     console.log('Iniciando persistência no Firestore: ', path);
@@ -171,6 +185,8 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
         customerCpf: String(formData.customerCpf || '').trim(),
         customerPhone: String(formData.customerPhone || '').trim(),
         carModel: String(formData.carModel).trim(),
+        carPlate: String(formData.carPlate).trim(),
+        carColor: String(formData.carColor).trim(),
         carYear: Number(formData.carYear) || new Date().getFullYear(),
         carPrice: Number(formData.carPrice) || 0,
         downPayment: Number(formData.downPayment) || 0,
@@ -262,6 +278,8 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
       value = maskCPF(value as string);
     } else if (field === 'customerPhone') {
       value = maskPhone(value as string);
+    } else if (field === 'carPlate') {
+      value = (value as string).toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^([A-Z]{3})([A-Z0-9])/, '$1-$2').slice(0, 8);
     }
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -329,39 +347,93 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
 
           {/* Card: Venda */}
           <Card className="border-none shadow-sm ring-1 ring-slate-200">
-            <CardHeader className="pb-3 px-4 pt-4">
+            <CardHeader className="pb-2 px-4 pt-4">
               <div className="flex items-center gap-2 text-slate-900">
                 <Car className="w-4 h-4 text-slate-500" />
-                <CardTitle className="text-xs font-black uppercase tracking-wider">Veículo / Venda</CardTitle>
+                <CardTitle className="text-xs font-black uppercase tracking-wider">Veículo / Moto</CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3 px-4 pb-4">
-              <Input 
-                id="carModel"
-                required
-                className="h-11 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl"
-                placeholder="Descrição (ex: Gol 1.0 2020)"
-                value={formData.carModel}
-                onChange={e => updateField('carModel', e.target.value)}
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <Input 
-                  id="carPrice"
-                  type="number"
-                  required
-                  placeholder="Valor Total"
-                  className="h-11 bg-slate-50/50 border-slate-200 focus:bg-white font-bold text-base rounded-xl"
-                  value={formData.carPrice || ''}
-                  onChange={e => updateField('carPrice', parseFloat(e.target.value))}
-                />
-                <Input 
-                  id="downPayment"
-                  type="number"
-                  placeholder="Entrada"
-                  className="h-11 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl"
-                  value={formData.downPayment || ''}
-                  onChange={e => updateField('downPayment', parseFloat(e.target.value))}
-                />
+            <CardContent className="space-y-2 px-4 pb-4">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="carPlate" className="text-[10px] uppercase font-bold text-slate-400">Placa</Label>
+                  <Input 
+                    id="carPlate"
+                    required
+                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-sm rounded-xl uppercase"
+                    placeholder="ABC-1234"
+                    value={formData.carPlate}
+                    onChange={e => updateField('carPlate', e.target.value.toUpperCase())}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="carModel" className="text-[10px] uppercase font-bold text-slate-400">Modelo</Label>
+                  <Input 
+                    id="carModel"
+                    required
+                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-sm rounded-xl"
+                    placeholder="Ex: CG 160"
+                    value={formData.carModel}
+                    onChange={e => updateField('carModel', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="carYear" className="text-[10px] uppercase font-bold text-slate-400">Ano</Label>
+                  <Input 
+                    id="carYear"
+                    type="number"
+                    required
+                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-sm rounded-xl"
+                    placeholder="Ex: 2020"
+                    value={formData.carYear || ''}
+                    onChange={e => updateField('carYear', parseInt(e.target.value))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="carColor" className="text-[10px] uppercase font-bold text-slate-400">Cor</Label>
+                  <Input 
+                    id="carColor"
+                    required
+                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-sm rounded-xl"
+                    placeholder="Ex: Preta"
+                    value={formData.carColor}
+                    onChange={e => updateField('carColor', e.target.value)}
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                <div className="space-y-1">
+                  <Label htmlFor="carPrice" className="text-[10px] uppercase font-bold text-slate-400">Valor da Venda</Label>
+                  <Input 
+                    id="carPrice"
+                    type="number"
+                    required
+                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white font-bold text-sm rounded-xl"
+                    placeholder="R$ 0,00"
+                    value={formData.carPrice || ''}
+                    onChange={e => updateField('carPrice', parseFloat(e.target.value))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="downPayment" className="text-[10px] uppercase font-bold text-slate-400">Entrada</Label>
+                  <Input 
+                    id="downPayment"
+                    type="number"
+                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-sm rounded-xl"
+                    placeholder="R$ 0,00"
+                    value={formData.downPayment || ''}
+                    onChange={e => updateField('downPayment', parseFloat(e.target.value))}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between bg-slate-50 rounded-xl p-3 border border-slate-100">
+                <Label className="text-[10px] uppercase font-bold text-slate-500">Valor Parcelado</Label>
+                <div className="text-sm font-black text-slate-900">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(financingDetails.principal)}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -441,7 +513,14 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
                 </div>
                 <div>
                   <p className="text-xs font-bold leading-none">Plano de {formData.installmentCount} meses</p>
-                  <p className="text-[10px] text-slate-400">Finaliza em {financingDetails.installmentList.length > 0 && format(new Date(financingDetails.installmentList[financingDetails.installmentList.length-1].dueDate), 'MMM/yyyy', { locale: ptBR })}</p>
+                  <p className="text-[10px] text-slate-400">
+                    Finaliza em {financingDetails.installmentList.length > 0 && 
+                      (() => {
+                        const d = new Date(financingDetails.installmentList[financingDetails.installmentList.length-1].dueDate);
+                        return !isNaN(d.getTime()) ? format(d, 'MMM/yyyy', { locale: ptBR }) : 'Data Inválida';
+                      })()
+                    }
+                  </p>
                 </div>
               </div>
 

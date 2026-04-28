@@ -5,7 +5,8 @@ import {
   where, 
   getDocs, 
   orderBy, 
-  updateDoc, 
+  updateDoc,
+  deleteDoc,
   doc, 
   serverTimestamp,
   onSnapshot
@@ -26,17 +27,25 @@ import {
   Calendar,
   DollarSign,
   User as UserIcon,
-  Car
+  Car,
+  Trash2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
+
+const safeFormat = (date: Date | string | number | null | undefined, fmt: string, options?: any) => {
+  if (!date) return 'Data Inválida';
+  const d = new Date(date);
+  if (!isValid(d)) return 'Data Inválida';
+  return format(d, fmt, options);
+};
 
 import { toast } from 'sonner';
 
@@ -56,6 +65,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSale, setSelectedSale] = useState<Proposal | null>(null);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   const fetchProposals = async (force = false) => {
     if (!auth.currentUser) return;
@@ -165,6 +175,39 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
     }
   };
 
+  const handleDeleteProposal = async (saleId: string) => {
+    try {
+      const docRef = doc(db, 'proposals', saleId);
+      await deleteDoc(docRef);
+      
+      const newProposals = proposals.filter(p => p.id !== saleId);
+      setProposals(newProposals);
+      localStorage.setItem('ansolin_proposals', JSON.stringify(newProposals));
+      
+      // Update dashboard stats too
+      const summary = newProposals.reduce((acc: any, curr: any) => {
+        acc.totalVendido += (curr.carPrice || 0);
+        acc.recebido += (curr.downPayment || 0);
+        acc.count++;
+        if (curr.installments) {
+          curr.installments.forEach((inst: Installment) => {
+            if (inst.status === 'paid') acc.recebido += (inst.value || 0);
+            else acc.aReceber += (inst.value || 0);
+          });
+        }
+        return acc;
+      }, { recebido: 0, aReceber: 0, totalVendido: 0, count: 0 });
+      localStorage.setItem('ansolin_stats', JSON.stringify(summary));
+      
+      setSelectedSale(null);
+      setIsConfirmingDelete(false);
+      toast.success('Venda excluída com sucesso.');
+    } catch (error) {
+      console.error('Error deleting proposal:', error);
+      toast.error('Erro ao excluir venda.');
+    }
+  };
+
   const filteredProposals = proposals.filter(p => {
     const matchesSearch = (p.customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                          (p.carModel || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -248,7 +291,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                       <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          {format(sale.createdAt, 'dd/MM/yy')}
+                          {safeFormat(sale.createdAt, 'dd/MM/yy')}
                         </span>
                         <Badge variant="outline" className="text-[8px] px-1.5 py-0 border-slate-200">
                           {sale.installmentCount}X PARCELAS
@@ -264,7 +307,10 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
       </div>
 
       {/* Sale Details Modal */}
-      <Dialog open={!!selectedSale} onOpenChange={() => setSelectedSale(null)}>
+      <Dialog open={!!selectedSale} onOpenChange={() => {
+        setSelectedSale(null);
+        setIsConfirmingDelete(false);
+      }}>
         <DialogContent className="max-w-md w-[95%] rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
           {selectedSale && (
             <div className="bg-[#F8FAFC]">
@@ -312,7 +358,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                         </div>
                         <div>
                           <p className="text-xs font-black text-slate-900">{(inst.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                          <p className="text-[10px] text-slate-500 font-bold uppercase">{format(new Date(inst.dueDate), 'dd MMMM yyyy', { locale: ptBR })}</p>
+                          <p className="text-[10px] text-slate-500 font-bold uppercase">{safeFormat(inst.dueDate, 'dd MMMM yyyy', { locale: ptBR })}</p>
                         </div>
                       </div>
                       <div className={cn(
@@ -326,10 +372,38 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                 </div>
               </div>
               
-              <div className="px-6 pb-6 pt-2">
-                <Button variant="outline" className="w-full h-11 rounded-2xl border-slate-200 text-slate-900 text-xs font-bold" onClick={() => setSelectedSale(null)}>
-                  Fechar Detalhes
-                </Button>
+              <div className="px-6 pb-6 pt-2 flex flex-col gap-2">
+                {isConfirmingDelete ? (
+                  <div className="flex gap-2 animate-in fade-in zoom-in duration-200">
+                    <Button 
+                      variant="destructive" 
+                      className="flex-1 h-11 rounded-2xl font-bold bg-rose-500 hover:bg-rose-600" 
+                      onClick={() => selectedSale && handleDeleteProposal(selectedSale.id)}
+                    >
+                      Confirmar Exclusão
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="flex-1 h-11 rounded-2xl border-slate-200 font-bold" 
+                      onClick={() => setIsConfirmingDelete(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1 h-11 rounded-2xl border-slate-200 text-slate-900 text-xs font-bold" onClick={() => setSelectedSale(null)}>
+                      Fechar Detalhes
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="w-11 h-11 rounded-2xl border-rose-200 text-rose-500 bg-rose-50/50 hover:bg-rose-100 p-0" 
+                      onClick={() => setIsConfirmingDelete(true)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           )}
