@@ -437,7 +437,10 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                     <div className="space-y-4 pt-1">
                       <div>
                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-tight">Valor Parcelado</p>
-                        <p className="text-2xl font-black tracking-tighter leading-none pt-0.5">{((selectedSale.installmentCount * selectedSale.installmentValue) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                        <p className="text-2xl font-black tracking-tighter leading-none pt-0.5">
+                          {((selectedSale.installmentCount * selectedSale.installmentValue) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          <span className="ml-2 text-slate-400">{selectedSale.installmentCount}X</span>
+                        </p>
                       </div>
 
                       <div className="grid grid-cols-1 gap-3 border-t border-white/5 pt-3">
