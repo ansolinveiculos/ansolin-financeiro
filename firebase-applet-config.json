@@ -1,10 +1,10 @@
 {
-  "projectId": "ansolin-veiculos",
-  "appId": "1:588068713243:web:809d0a9fa98970e7da19be",
-  "apiKey": "AIzaSyBK_o1mPCsJp2a9DHj945Y6SBCSHLgeR0Y",
-  "authDomain": "ansolin-veiculos.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-17896489-fd40-4556-924a-1215fd387e27",
-  "storageBucket": "ansolin-veiculos.firebasestorage.app",
-  "messagingSenderId": "588068713243",
-  "measurementId": ""
+  "projectId": "ansolin-financeiro",
+  "appId": "1:299872191834:web:0fad847957fd587f691f63",
+  "apiKey": "AIzaSyBHGmjrsgBTTfYagRmBsG5K-B_ngY9ID4w",
+  "authDomain": "ansolin-financeiro.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "ansolin-financeiro.firebasestorage.app",
+  "messagingSenderId": "299872191834",
+  "measurementId": "G-6T3G1BNGMV"
 }
