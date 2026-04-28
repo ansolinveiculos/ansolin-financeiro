@@ -432,6 +432,9 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                     <div>
                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Cliente</p>
                       <h2 className="text-xl font-black truncate">{selectedSale.customerName}</h2>
+                      <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
+                        {selectedSale.carModel}, {selectedSale.carYear}, {selectedSale.carColor || 'SEM COR'}
+                      </p>
                     </div>
                     
                     <div className="space-y-4 pt-1">

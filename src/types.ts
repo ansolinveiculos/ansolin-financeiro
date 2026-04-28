@@ -32,6 +32,8 @@ export interface Proposal {
   customerPhone?: string;
   carModel: string;
   carYear: number;
+  carPlate?: string;
+  carColor?: string;
   carPrice: number;
   downPayment: number;
   installmentCount: number;
