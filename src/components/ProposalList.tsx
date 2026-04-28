@@ -370,8 +370,8 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                 
                 <div className="grid grid-cols-2 gap-4 pt-2">
                   <div>
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Valor Venda</p>
-                    <p className="text-sm font-bold">{(selectedSale.carPrice || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Valor Parcelado</p>
+                    <p className="text-sm font-bold">{((selectedSale.installmentCount * selectedSale.installmentValue) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Parcelas</p>
@@ -380,19 +380,19 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                 </div>
               </div>
 
-              <div className="p-6">
-                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Cronograma de Pagamentos</h3>
+              <div className="px-3 pb-6 pt-6">
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 px-3">Cronograma de Pagamentos</h3>
                 
-                <div className="bg-white rounded-3xl ring-1 ring-slate-100 overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                <div className="bg-white rounded-3xl ring-1 ring-slate-100 overflow-hidden mx-1">
+                  <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-left border-collapse table-fixed min-w-[340px]">
                       <thead>
-                        <tr className="text-[9px] font-black uppercase text-slate-400 border-b border-slate-50 bg-slate-50/50">
-                          <th className="py-2 pl-4">Parc</th>
-                          <th className="py-2">Dt Vcto</th>
-                          <th className="py-2">Dt Pgto</th>
-                          <th className="py-2">Valor</th>
-                          <th className="py-2 pr-4 text-center">Status</th>
+                        <tr className="text-[8px] font-black uppercase text-slate-400 border-b border-slate-50 bg-slate-50/50">
+                          <th className="py-2 pl-3 w-[35px]">Parc</th>
+                          <th className="py-2 w-[85px]">Vencimento</th>
+                          <th className="py-2 w-[85px]">Pagamento</th>
+                          <th className="py-2 w-[85px]">Valor</th>
+                          <th className="py-2 pr-3 text-center w-[50px]">Status</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -408,13 +408,13 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                           const rowColor = isPaid ? 'text-slate-900' : (isOverdue ? 'text-rose-600' : 'text-slate-400');
 
                           return (
-                            <tr key={inst.id} className={cn("text-[11px] font-bold transition-colors group", rowColor)}>
-                              <td className="py-2.5 pl-4 font-black">{String(inst.number).padStart(2, '0')}</td>
+                            <tr key={inst.id} className={cn("text-[10px] font-normal transition-colors group", rowColor)}>
+                              <td className="py-2.5 pl-3 font-bold">{String(inst.number).padStart(2, '0')}</td>
                               <td className="py-2.5">
                                 <input 
                                   type="date" 
                                   value={inst.dueDate ? new Date(inst.dueDate).toISOString().split('T')[0] : ''} 
-                                  className="bg-transparent border-none p-0 focus:ring-0 w-[90px] text-inherit font-inherit cursor-pointer hover:underline decoration-dotted"
+                                  className="bg-transparent border-none p-0 focus:ring-0 w-full text-inherit font-inherit cursor-pointer hover:underline decoration-dotted"
                                   onChange={(e) => updateInstallmentField(selectedSale.id, inst.id, 'dueDate', new Date(e.target.value + 'T12:00:00').toISOString())}
                                 />
                               </td>
@@ -423,7 +423,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                                   type="date" 
                                   value={inst.paidAt ? new Date(inst.paidAt).toISOString().split('T')[0] : ''} 
                                   className={cn(
-                                    "bg-transparent border-none p-0 focus:ring-0 w-[90px] text-inherit font-inherit cursor-pointer hover:underline decoration-dotted",
+                                    "bg-transparent border-none p-0 focus:ring-0 w-full text-inherit font-inherit cursor-pointer hover:underline decoration-dotted",
                                     !inst.paidAt && "text-slate-200"
                                   )}
                                   onChange={(e) => {
@@ -434,24 +434,25 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                               </td>
                               <td className="py-2.5">
                                 <div className="flex items-center gap-0.5">
-                                  <span className="opacity-50 font-medium">R$</span>
+                                  <span className="opacity-40 font-medium scale-90">R$</span>
                                   <input 
                                     type="number" 
+                                    step="0.01"
                                     value={inst.value} 
-                                    className="bg-transparent border-none p-0 focus:ring-0 w-16 text-inherit font-black"
+                                    className="bg-transparent border-none p-0 focus:ring-0 w-full text-inherit font-medium"
                                     onChange={(e) => updateInstallmentField(selectedSale.id, inst.id, 'value', Number(e.target.value))}
                                   />
                                 </div>
                               </td>
-                              <td className="py-2.5 pr-4 text-center">
+                              <td className="py-2.5 pr-3 text-center">
                                 <button 
                                   onClick={() => toggleInstallmentStatus(selectedSale.id, inst.id)}
                                   className={cn(
-                                    "w-6 h-6 rounded-full flex items-center justify-center transition-all mx-auto",
+                                    "w-7 h-7 rounded-full flex items-center justify-center transition-all mx-auto",
                                     isPaid ? "bg-emerald-500 text-white shadow-sm shadow-emerald-200" : "bg-slate-100 text-slate-400 hover:bg-slate-200"
                                   )}
                                 >
-                                  {isPaid ? <CheckCircle2 className="w-3.5 h-3.5" /> : <RefreshCw className="w-3 h-3" />}
+                                  {isPaid ? <CheckCircle2 className="w-4 h-4" /> : <RefreshCw className="w-3.5 h-3.5" />}
                                 </button>
                               </td>
                             </tr>
