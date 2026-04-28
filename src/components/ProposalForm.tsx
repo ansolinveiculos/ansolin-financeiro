@@ -23,6 +23,7 @@ import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { format, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parsePhoneNumber } from 'libphonenumber-js/max';
 
 import { toast } from 'sonner';
 
@@ -55,6 +56,23 @@ const maskCPF = (value: string) => {
     .replace(/(-\d{2})\d+?$/, '$1');
 };
 
+const maskPhone = (value: string) => {
+  return value
+    .replace(/\D/g, '')
+    .replace(/(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d)/, '$1-$2')
+    .replace(/(-\d{4})\d+?$/, '$1');
+};
+
+const isValidPhone = (phone: string) => {
+  try {
+    const phoneNumber = parsePhoneNumber(phone, 'BR');
+    return phoneNumber.isValid() && phoneNumber.getType() === 'MOBILE';
+  } catch (e) {
+    return false;
+  }
+};
+
 interface ProposalFormProps {
   onSuccess: () => void;
   onCancel: () => void;
@@ -65,6 +83,7 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
   const [formData, setFormData] = useState({
     customerName: '',
     customerCpf: '',
+    customerPhone: '',
     carModel: '',
     carYear: new Date().getFullYear(),
     carPrice: 0,
@@ -125,6 +144,13 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
       }
     }
 
+    if (formData.customerPhone && formData.customerPhone.replace(/\D/g, '').length > 0) {
+      if (!isValidPhone(formData.customerPhone)) {
+        toast.error('O celular informado é inválido. Use o formato (DD) 9XXXX-XXXX.');
+        return;
+      }
+    }
+
     setLoading(true);
     const path = 'proposals';
     console.log('Iniciando persistência no Firestore: ', path);
@@ -143,6 +169,7 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
       const payload = {
         customerName: String(formData.customerName).trim(),
         customerCpf: String(formData.customerCpf || '').trim(),
+        customerPhone: String(formData.customerPhone || '').trim(),
         carModel: String(formData.carModel).trim(),
         carYear: Number(formData.carYear) || new Date().getFullYear(),
         carPrice: Number(formData.carPrice) || 0,
@@ -233,6 +260,8 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
   const updateField = (field: string, value: any) => {
     if (field === 'customerCpf') {
       value = maskCPF(value as string);
+    } else if (field === 'customerPhone') {
+      value = maskPhone(value as string);
     }
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -271,16 +300,29 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
                   onChange={e => updateField('customerName', e.target.value)}
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="customerCpf" className="text-[10px] uppercase font-bold text-slate-400">CPF (Opcional)</Label>
-                <Input 
-                  id="customerCpf"
-                  placeholder="000.000.000-00"
-                  maxLength={14}
-                  className="h-11 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl"
-                  value={formData.customerCpf}
-                  onChange={e => updateField('customerCpf', e.target.value)}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="customerCpf" className="text-[10px] uppercase font-bold text-slate-400">CPF (Opcional)</Label>
+                  <Input 
+                    id="customerCpf"
+                    placeholder="000.000.000-00"
+                    maxLength={14}
+                    className="h-11 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl"
+                    value={formData.customerCpf}
+                    onChange={e => updateField('customerCpf', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="customerPhone" className="text-[10px] uppercase font-bold text-slate-400">Celular (Opcional)</Label>
+                  <Input 
+                    id="customerPhone"
+                    placeholder="(00) 00000-0000"
+                    maxLength={15}
+                    className="h-11 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl"
+                    value={formData.customerPhone}
+                    onChange={e => updateField('customerPhone', e.target.value)}
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>

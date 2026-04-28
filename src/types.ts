@@ -27,6 +27,8 @@ export interface Proposal {
   id: string;
   customerId: string;
   customerName: string;
+  customerCpf?: string;
+  customerPhone?: string;
   carModel: string;
   carYear: number;
   carPrice: number;
