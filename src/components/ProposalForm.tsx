@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { ProposalStatus, OperationType } from '../types';
+import { ProposalStatus, Installment } from '../types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,10 +16,13 @@ import {
   AlertCircle,
   Save,
   ChevronLeft,
-  Info
+  Info,
+  CheckCircle2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
+import { format, addMonths } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 import { toast } from 'sonner';
 
@@ -37,34 +40,48 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
     carYear: new Date().getFullYear(),
     carPrice: 0,
     downPayment: 0,
-    installmentCount: 48,
-    interestRate: 1.29, // Default base interest
+    installmentCount: 12,
+    interestRate: 0, // Zero interest by default for "vendas a prazo" direct
+    firstDueDate: format(addMonths(new Date(), 1), 'yyyy-MM-dd'),
     notes: ''
   });
 
   const financingDetails = useMemo(() => {
     const principal = formData.carPrice - formData.downPayment;
-    if (principal <= 0) return { principal: 0, installment: 0, total: 0 };
+    if (principal <= 0) return { principal: 0, installment: 0, total: 0, installmentList: [] };
 
-    const i = formData.interestRate / 100;
-    const n = formData.installmentCount;
+    // Simple interest or no interest as requested (simple division for direct sales)
+    const totalWithInterest = principal * (1 + (formData.interestRate / 100));
+    const installmentValue = totalWithInterest / formData.installmentCount;
     
-    // PMT formula: P * [i(1+i)^n] / [(1+i)^n - 1]
-    const installmentValue = principal * (i * Math.pow(1 + i, n)) / (Math.pow(1 + i, n) - 1);
+    // Generate installment list
+    const installmentList: Installment[] = [];
+    const firstDate = new Date(formData.firstDueDate);
     
+    for (let i = 1; i <= formData.installmentCount; i++) {
+      installmentList.push({
+        id: crypto.randomUUID(),
+        number: i,
+        dueDate: addMonths(firstDate, i - 1).toISOString(),
+        value: installmentValue,
+        status: 'pending'
+      });
+    }
+
     return {
       principal,
-      installment: isFinite(installmentValue) ? installmentValue : 0,
-      total: installmentValue * n
+      installment: installmentValue,
+      total: totalWithInterest,
+      installmentList
     };
-  }, [formData.carPrice, formData.downPayment, formData.installmentCount, formData.interestRate]);
+  }, [formData.carPrice, formData.downPayment, formData.installmentCount, formData.interestRate, formData.firstDueDate]);
 
   const handleSubmit = async (e: React.FormEvent, status: ProposalStatus) => {
     e.preventDefault();
     if (!auth.currentUser) return;
 
     if (formData.carPrice <= 0) {
-      toast.error('O valor do veículo deve ser maior que zero.');
+      toast.error('O valor da venda deve ser maior que zero.');
       return;
     }
 
@@ -73,17 +90,18 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
       await addDoc(collection(db, 'proposals'), {
         ...formData,
         installmentValue: financingDetails.installment,
+        installments: financingDetails.installmentList,
         status,
         userId: auth.currentUser.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
       
-      toast.success(status === ProposalStatus.DRAFT ? 'Rascunho salvo com sucesso!' : 'Proposta enviada para análise!');
+      toast.success('Venda registrada com sucesso!');
       onSuccess();
     } catch (error) {
       console.error('Error saving proposal:', error);
-      toast.error('Erro ao salvar proposta. Verifique sua conexão.');
+      toast.error('Erro ao salvar venda.');
     } finally {
       setLoading(false);
     }
@@ -94,48 +112,45 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={onCancel} className="text-slate-500">
-            <ChevronLeft className="w-5 h-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Nova Proposta</h1>
-            <p className="text-slate-500">Preencha os dados básicos para simulação e cadastro.</p>
-          </div>
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={onCancel} className="text-slate-500 rounded-full h-10 w-10">
+          <ChevronLeft className="w-5 h-5" />
+        </Button>
+        <div>
+          <h1 className="text-xl font-black text-slate-900 tracking-tight">Lançar Venda</h1>
+          <p className="text-xs text-slate-500">Registre os dados da venda parcelada.</p>
         </div>
       </div>
 
-      <form onSubmit={(e) => handleSubmit(e, ProposalStatus.PENDING)} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left Column: Input Forms */}
-        <div className="space-y-6">
+      <form onSubmit={(e) => handleSubmit(e, ProposalStatus.APPROVED)} className="grid grid-cols-1 gap-6">
+        <div className="space-y-4">
+          {/* Card: Cliente */}
           <Card className="border-none shadow-sm ring-1 ring-slate-200">
-            <CardHeader className="pb-4">
+            <CardHeader className="pb-3 px-4 pt-4">
               <div className="flex items-center gap-2 text-slate-900">
-                <User className="w-4 h-4" />
-                <CardTitle className="text-sm">Dados do Cliente</CardTitle>
+                <User className="w-4 h-4 text-blue-500" />
+                <CardTitle className="text-xs font-black uppercase tracking-wider">Cliente</CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="customerName" className="text-xs text-slate-500">Nome Completo</Label>
+            <CardContent className="space-y-3 px-4 pb-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="customerName" className="text-[10px] uppercase font-bold text-slate-400">Nome</Label>
                 <Input 
                   id="customerName"
                   required
-                  placeholder="Ex: João Silva"
-                  className="bg-slate-50/50 border-slate-200 focus:bg-white"
+                  placeholder="Nome do cliente"
+                  className="h-11 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl"
                   value={formData.customerName}
                   onChange={e => updateField('customerName', e.target.value)}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="customerCpf" className="text-xs text-slate-500">CPF</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="customerCpf" className="text-[10px] uppercase font-bold text-slate-400">CPF (Opcional)</Label>
                 <Input 
                   id="customerCpf"
-                  required
                   placeholder="000.000.000-00"
-                  className="bg-slate-50/50 border-slate-200 focus:bg-white"
+                  className="h-11 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl"
                   value={formData.customerCpf}
                   onChange={e => updateField('customerCpf', e.target.value)}
                 />
@@ -143,96 +158,85 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
             </CardContent>
           </Card>
 
+          {/* Card: Venda */}
           <Card className="border-none shadow-sm ring-1 ring-slate-200">
-            <CardHeader className="pb-4">
+            <CardHeader className="pb-3 px-4 pt-4">
               <div className="flex items-center gap-2 text-slate-900">
-                <Car className="w-4 h-4" />
-                <CardTitle className="text-sm">Dados do Veículo</CardTitle>
+                <Car className="w-4 h-4 text-slate-500" />
+                <CardTitle className="text-xs font-black uppercase tracking-wider">Veículo / Venda</CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="carModel" className="text-xs text-slate-500">Modelo</Label>
+            <CardContent className="space-y-3 px-4 pb-4">
+              <Input 
+                id="carModel"
+                required
+                className="h-11 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl"
+                placeholder="Descrição (ex: Gol 1.0 2020)"
+                value={formData.carModel}
+                onChange={e => updateField('carModel', e.target.value)}
+              />
+              <div className="grid grid-cols-2 gap-3">
                 <Input 
-                  id="carModel"
+                  id="carPrice"
+                  type="number"
                   required
-                  placeholder="Ex: Toyota Corolla Cross"
-                  className="bg-slate-50/50 border-slate-200 focus:bg-white"
-                  value={formData.carModel}
-                  onChange={e => updateField('carModel', e.target.value)}
+                  placeholder="Valor Total"
+                  className="h-11 bg-slate-50/50 border-slate-200 focus:bg-white font-bold text-base rounded-xl"
+                  value={formData.carPrice || ''}
+                  onChange={e => updateField('carPrice', parseFloat(e.target.value))}
                 />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="carYear" className="text-xs text-slate-500">Ano</Label>
-                  <Input 
-                    id="carYear"
-                    type="number"
-                    required
-                    className="bg-slate-50/50 border-slate-200 focus:bg-white font-mono"
-                    value={formData.carYear}
-                    onChange={e => updateField('carYear', parseInt(e.target.value))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="carPrice" className="text-xs text-slate-500">Valor (R$)</Label>
-                  <Input 
-                    id="carPrice"
-                    type="number"
-                    required
-                    className="bg-slate-50/50 border-slate-200 focus:bg-white font-mono font-bold"
-                    value={formData.carPrice || ''}
-                    onChange={e => updateField('carPrice', parseFloat(e.target.value))}
-                  />
-                </div>
+                <Input 
+                  id="downPayment"
+                  type="number"
+                  placeholder="Entrada"
+                  className="h-11 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl"
+                  value={formData.downPayment || ''}
+                  onChange={e => updateField('downPayment', parseFloat(e.target.value))}
+                />
               </div>
             </CardContent>
           </Card>
 
+          {/* Card: Parcelas */}
           <Card className="border-none shadow-sm ring-1 ring-slate-200">
-            <CardHeader className="pb-4">
+            <CardHeader className="pb-3 px-4 pt-4">
               <div className="flex items-center gap-2 text-slate-900">
-                <Calculator className="w-4 h-4" />
-                <CardTitle className="text-sm">Condições de Financiamento</CardTitle>
+                <Calendar className="w-4 h-4 text-purple-500" />
+                <CardTitle className="text-xs font-black uppercase tracking-wider">Prazos</CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="downPayment" className="text-xs text-slate-500">Entrada (R$)</Label>
-                  <Input 
-                    id="downPayment"
-                    type="number"
-                    className="bg-slate-50/50 border-slate-200 focus:bg-white font-mono"
-                    value={formData.downPayment || ''}
-                    onChange={e => updateField('downPayment', parseFloat(e.target.value))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="installmentCount" className="text-xs text-slate-500">Parcelas</Label>
+            <CardContent className="space-y-3 px-4 pb-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">Nº Parcelas</Label>
                   <select 
-                    id="installmentCount"
-                    className="w-full h-10 px-3 py-2 bg-slate-50/50 border-slate-200 border rounded-md text-sm font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-950/10"
+                    className="w-full h-11 px-3 bg-slate-50/50 border border-slate-200 rounded-xl text-base focus:bg-white"
                     value={formData.installmentCount}
                     onChange={e => updateField('installmentCount', parseInt(e.target.value))}
                   >
-                    {[12, 24, 36, 48, 60, 72].map(n => (
+                    {Array.from({ length: 24 }, (_, i) => i + 1).map(n => (
                       <option key={n} value={n}>{n}x</option>
                     ))}
                   </select>
                 </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">1º Vencimento</Label>
+                  <Input 
+                    type="date"
+                    className="h-11 bg-slate-50/50 border-slate-200 rounded-xl text-sm"
+                    value={formData.firstDueDate}
+                    onChange={e => updateField('firstDueDate', e.target.value)}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="interestRate" className="text-xs text-slate-500 flex justify-between">
-                  Taxa de Juros Mensal
-                  <span className="font-mono text-slate-900 font-bold">{formData.interestRate}%</span>
+              <div className="space-y-1 pt-2">
+                <Label className="text-[10px] uppercase font-bold text-slate-400 flex justify-between">
+                  Juros Total (%)
+                  <span className="text-slate-900 font-black">{formData.interestRate}%</span>
                 </Label>
                 <input 
-                  type="range" 
-                  min="0.5" 
-                  max="4.0" 
-                  step="0.01"
-                  className="w-full accent-slate-900 h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer"
+                  type="range" min="0" max="20" step="0.1"
+                  className="w-full accent-slate-900"
                   value={formData.interestRate}
                   onChange={e => updateField('interestRate', parseFloat(e.target.value))}
                 />
@@ -241,97 +245,44 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
           </Card>
         </div>
 
-        {/* Right Column: Simulation Result & Actions */}
-        <div className="space-y-6">
-          <Card className="border-none bg-slate-900 text-white shadow-xl shadow-slate-200 sticky top-8">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <DollarSign className="w-5 h-5 text-green-400" />
-                Resumo da Simulação
-              </CardTitle>
-              <CardDescription className="text-slate-400">Projeção estimada de crédito</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-                <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest leading-none">Parcela Mensal</p>
-                    <p className="text-3xl font-bold mt-1 text-white">
-                      {financingDetails.installment.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </p>
-                  </div>
-                  <Badge className="bg-emerald-500 text-white border-none h-fit">Simulado</Badge>
+        {/* Resumo e Ação */}
+        <div className="space-y-4">
+          <Card className="bg-slate-900 text-white border-none shadow-xl rounded-2xl overflow-hidden">
+            <CardContent className="p-5 space-y-4">
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Parcela Mensal</p>
+                  <p className="text-2xl font-black text-white">
+                    {financingDetails.installment.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </p>
                 </div>
-
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div className="space-y-1">
-                    <p className="text-slate-500">Valor Principal</p>
-                    <p className="font-mono font-medium">{financingDetails.principal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                  </div>
-                  <div className="space-y-1 text-right">
-                    <p className="text-slate-500">Taxa Aplicada</p>
-                    <p className="font-mono font-medium">{formData.interestRate}% am</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-slate-500">Total a Pagar</p>
-                    <p className="font-mono font-medium text-amber-400">{financingDetails.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                  </div>
-                  <div className="space-y-1 text-right">
-                    <p className="text-slate-500">Total de Juros</p>
-                    <p className="font-mono font-medium text-rose-400">{(financingDetails.total - financingDetails.principal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                  </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Total</p>
+                  <p className="text-sm font-bold text-amber-400">
+                    {financingDetails.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </p>
                 </div>
               </div>
 
-              {/* Alert Box */}
-              <div className="flex gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                <p className="text-[11px] text-blue-100 leading-tight">
-                  Esta simulação é preliminar e não exclui a necessidade de análise formal de crédito junto à instituição financeira parceira.
-                </p>
-              </div>
+              <div className="h-px bg-white/10 w-full" />
 
-              <div className="space-y-3 pt-4">
-                <Button 
-                  type="submit" 
-                  disabled={loading || formData.carPrice <= 0}
-                  className="w-full h-12 bg-white text-slate-900 hover:bg-slate-100 font-bold text-base transition-all active:scale-95"
-                >
-                  {loading ? 'Salvando...' : 'Enviar para Análise'}
-                </Button>
-                <div className="grid grid-cols-2 gap-3">
-                  <Button 
-                    type="button" 
-                    onClick={(e) => handleSubmit(e, ProposalStatus.DRAFT)}
-                    variant="outline" 
-                    className="border-white/20 text-white hover:bg-white/10 bg-transparent"
-                  >
-                    Salvar Rascunho
-                  </Button>
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    onClick={onCancel}
-                    className="text-slate-400 hover:text-white"
-                  >
-                    Cancelar
-                  </Button>
+              <div className="flex items-center gap-3 py-1">
+                <div className="p-2 bg-white/10 rounded-lg">
+                  <CheckCircle2 className="w-4 h-4 text-green-400" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold leading-none">Plano de {formData.installmentCount} meses</p>
+                  <p className="text-[10px] text-slate-400">Finaliza em {financingDetails.installmentList.length > 0 && format(new Date(financingDetails.installmentList[financingDetails.installmentList.length-1].dueDate), 'MMM/yyyy', { locale: ptBR })}</p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          <Card className="border-none shadow-sm ring-1 ring-slate-200">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Notas Internas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <textarea 
-                className="w-full h-24 p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 transition-all resize-none"
-                placeholder="Observações sobre o perfil do cliente ou veículo..."
-                value={formData.notes}
-                onChange={e => updateField('notes', e.target.value)}
-              />
+              <Button 
+                type="submit" 
+                disabled={loading || formData.carPrice <= 0}
+                className="w-full h-12 bg-white text-slate-900 hover:bg-slate-50 font-black text-base rounded-xl shadow-lg transition-all active:scale-95"
+              >
+                {loading ? 'Salvando...' : 'Confirmar Venda'}
+              </Button>
             </CardContent>
           </Card>
         </div>

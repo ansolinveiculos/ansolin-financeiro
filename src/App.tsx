@@ -11,7 +11,7 @@ import { Dashboard } from './components/Dashboard';
 import { ProposalList } from './components/ProposalList';
 import { ProposalForm } from './components/ProposalForm';
 import { Button } from '@/components/ui/button';
-import { LogIn, CarFront } from 'lucide-react';
+import { LogIn, CircleDollarSign } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 type View = 'dashboard' | 'proposals' | 'new-proposal';
@@ -46,7 +46,7 @@ export default function App() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50">
         <div className="animate-pulse flex flex-col items-center gap-4">
-          <CarFront className="w-12 h-12 text-slate-400" />
+          <CircleDollarSign className="w-12 h-12 text-slate-400 animate-bounce" />
           <p className="text-slate-500 font-medium">Carregando...</p>
         </div>
       </div>
@@ -55,25 +55,32 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="min-h-screen grid items-center justify-center p-4 bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-md w-full space-y-8 p-8 bg-white rounded-2xl shadow-sm border border-slate-200 text-center"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-sm w-full space-y-8 p-10 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 text-center"
         >
           <div className="flex justify-center">
-            <div className="p-4 bg-slate-100 rounded-full">
-              <CarFront className="w-12 h-12 text-slate-800" />
+            <div className="p-5 bg-slate-900 rounded-2xl rotate-3 shadow-lg">
+              <CircleDollarSign className="w-10 h-10 text-white" />
             </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">ANSOLIN FINANCEIRO</h1>
-            <p className="mt-2 text-slate-500">Gestão profissional de financiamentos para sua concessionária.</p>
+          <div className="space-y-2">
+            <h1 className="text-3xl font-black tracking-tight text-slate-900">ANSOLIN</h1>
+            <div className="h-1 w-12 bg-slate-200 mx-auto rounded-full" />
+            <p className="text-sm text-slate-500 font-medium px-4">Gestão inteligente de financiamentos automotivos.</p>
           </div>
-          <Button onClick={handleLogin} className="w-full h-12 text-lg font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-lg transition-all">
-            <LogIn className="mr-2 h-5 w-5" /> Entrar com Google
-          </Button>
-          <p className="text-xs text-slate-400 italic">Acesso restrito para colaboradores autorizados.</p>
+          <div className="pt-4">
+            <Button 
+              onClick={handleLogin} 
+              className="w-full h-14 text-base font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-2xl shadow-xl hover:shadow-2xl transition-all active:scale-95 group"
+            >
+              <LogIn className="mr-3 h-5 w-5 group-hover:translate-x-1 transition-transform" /> 
+              Entrar com Google
+            </Button>
+            <p className="mt-6 text-[10px] text-slate-400 uppercase tracking-widest font-bold">Acesso Restrito</p>
+          </div>
         </motion.div>
       </div>
     );

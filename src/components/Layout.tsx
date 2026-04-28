@@ -1,15 +1,13 @@
 import React from 'react';
-import { User } from 'firebase/auth';
+import { User as FirebaseUser } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { 
   LayoutDashboard, 
   FileText, 
   PlusCircle, 
   LogOut, 
-  Menu,
-  ChevronRight,
+  CircleDollarSign,
   User as UserIcon,
-  CircleDollarSign
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -17,113 +15,86 @@ interface LayoutProps {
   children: React.ReactNode;
   currentView: 'dashboard' | 'proposals' | 'new-proposal';
   onViewChange: (view: 'dashboard' | 'proposals' | 'new-proposal') => void;
-  user: User;
+  user: FirebaseUser;
   onLogout: () => void;
 }
 
 export function Layout({ children, currentView, onViewChange, user, onLogout }: LayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = React.useState(true);
-
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'proposals', label: 'Propostas', icon: FileText },
-    { id: 'new-proposal', label: 'Nova Proposta', icon: PlusCircle },
+    { id: 'dashboard', label: 'Painel', icon: LayoutDashboard },
+    { id: 'proposals', label: 'Vendas', icon: FileText },
+    { id: 'new-proposal', label: 'Nova', icon: PlusCircle },
   ] as const;
 
   return (
-    <div className="flex h-screen bg-[#F8FAFC]">
-      {/* Sidebar */}
-      <aside className={cn(
-        "bg-white border-r border-slate-200 transition-all duration-300 flex flex-col",
-        sidebarOpen ? "w-64" : "w-20"
-      )}>
-        <div className="p-6 flex items-center gap-3">
-          <div className="bg-slate-900 p-2 rounded-lg">
-            <CircleDollarSign className="w-6 h-6 text-white" />
+    <div className="flex flex-col h-screen bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden">
+      {/* Header Compacto */}
+      <header className="h-14 bg-white border-b border-slate-100 px-4 flex items-center justify-between sticky top-0 z-50 shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 bg-slate-900 rounded-lg">
+            <CircleDollarSign className="w-5 h-5 text-white" />
           </div>
-          {sidebarOpen && <span className="font-bold text-xl tracking-tight text-slate-900">ANSOLIN FINANCEIRO</span>}
+          <span className="font-black text-sm tracking-tight text-slate-900 leading-none">ANSOLIN</span>
         </div>
-
-        <nav className="flex-1 px-4 space-y-2 py-4">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = currentView === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => onViewChange(item.id)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                  isActive 
-                    ? "bg-slate-900 text-white shadow-md shadow-slate-200" 
-                    : "text-slate-600 hover:bg-slate-100"
-                )}
-              >
-                <Icon className={cn("w-5 h-5", isActive ? "text-white" : "text-slate-400")} />
-                {sidebarOpen && <span>{item.label}</span>}
-                {sidebarOpen && isActive && <ChevronRight className="ml-auto w-4 h-4 opacity-50" />}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="p-4 border-t border-slate-100">
-          <div className={cn("flex items-center gap-3 p-2 rounded-xl bg-slate-50 border border-slate-100", !sidebarOpen && "justify-center")}>
-            <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden border border-slate-300">
-              {user.photoURL ? (
-                <img src={user.photoURL} alt={user.displayName || ''} className="w-full h-full object-cover" />
-              ) : (
-                <UserIcon className="w-5 h-5 text-slate-500" />
-              )}
-            </div>
-            {sidebarOpen && (
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-slate-900 truncate">{user.displayName}</p>
-                <p className="text-[10px] text-slate-500 truncate">{user.email}</p>
-              </div>
-            )}
+        
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col items-end">
+            <span className="text-[10px] font-bold text-slate-900 leading-none">{user?.displayName?.split(' ')[0] || 'Usuário'}</span>
+            <span className="text-[9px] text-green-500 font-bold flex items-center gap-1">
+              <span className="w-1 h-1 bg-green-500 rounded-full animate-pulse" /> ONLINE
+            </span>
           </div>
           <Button 
             variant="ghost" 
-            size="sm" 
+            size="icon" 
             onClick={onLogout}
-            className={cn("w-full mt-4 text-slate-500 hover:text-red-600 hover:bg-red-50", !sidebarOpen && "p-0")}
+            className="h-8 w-8 text-slate-400 hover:text-rose-500 transition-colors"
           >
-            <LogOut className="w-4 h-4 mr-2" />
-            {sidebarOpen && <span>Sair</span>}
+            <LogOut className="w-4 h-4" />
           </Button>
         </div>
-      </aside>
+      </header>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-16 bg-white border-bottom border-slate-200 flex items-center justify-between px-8 z-10 shadow-sm shadow-slate-100/50">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-slate-500">
-              <Menu className="w-5 h-5" />
-            </Button>
-            <h2 className="text-lg font-semibold text-slate-900 capitalize">
-              {navItems.find(i => i.id === currentView)?.label || 'ANSOLIN FINANCEIRO'}
-            </h2>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex flex-col items-end">
-              <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Status do Sistema</span>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
-                <span className="text-xs font-medium text-slate-600">Online</span>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <div className="flex-1 overflow-y-auto p-8 scroll-smooth">
-          <div className="max-w-6xl mx-auto pb-12">
-            {children}
-          </div>
+      {/* Conteúdo Principal */}
+      <main className="flex-1 overflow-y-auto pb-24 touch-pan-y scroll-smooth">
+        <div className="p-4 w-full max-w-lg mx-auto">
+          {children}
         </div>
       </main>
+
+      {/* Navegação Inferior (Mobile Focus) */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-lg border-t border-slate-100 flex justify-around items-center px-4 py-2 pb-6 z-50 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)]">
+        {navItems.map((item) => {
+          const isActive = currentView === item.id;
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              onClick={() => onViewChange(item.id)}
+              className={cn(
+                "flex flex-col items-center gap-1 p-2 transition-all active:scale-90 relative",
+                isActive ? "text-slate-900" : "text-slate-400"
+              )}
+            >
+              <div className={cn(
+                "p-2 rounded-xl transition-all",
+                isActive ? "bg-slate-900 text-white shadow-lg shadow-slate-200" : "bg-transparent"
+              )}>
+                <Icon className="w-5 h-5" />
+              </div>
+              <span className={cn(
+                "text-[10px] font-bold uppercase tracking-widest transition-all",
+                isActive ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1 h-0 overflow-hidden"
+              )}>
+                {item.label}
+              </span>
+              {isActive && (
+                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-slate-900 rounded-full" />
+              )}
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 }

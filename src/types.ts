@@ -6,6 +6,14 @@ export enum ProposalStatus {
   COMPLETED = 'completed',
 }
 
+export interface Installment {
+  id: string;
+  number: number;
+  dueDate: string;
+  value: number;
+  status: 'pending' | 'paid';
+}
+
 export interface Customer {
   id: string;
   name: string;
@@ -27,6 +35,8 @@ export interface Proposal {
   installmentValue: number;
   interestRate: number;
   status: ProposalStatus;
+  installments?: Installment[];
+  firstDueDate?: string;
   notes?: string;
   userId: string;
   createdAt: Date;
