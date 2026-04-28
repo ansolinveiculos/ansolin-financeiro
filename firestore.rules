@@ -23,16 +23,24 @@ service cloud.firestore {
     match /proposals/{proposalId} {
       function isValidProposal(data) {
         return data.customerName is string && data.customerName.size() <= 200 &&
+               (data.customerCpf == null || (data.customerCpf is string && data.customerCpf.size() <= 20)) &&
                data.carModel is string && data.carModel.size() <= 100 &&
+               data.carYear is number &&
                data.carPrice is number && data.carPrice > 0 &&
                data.downPayment is number && data.downPayment >= 0 &&
+               data.installmentCount is number &&
+               data.interestRate is number &&
+               data.firstDueDate is string &&
+               (data.notes == null || data.notes is string) &&
+               data.installmentValue is number &&
+               data.installments is list &&
                data.status in ['draft', 'pending', 'approved', 'rejected', 'completed'] &&
                data.userId == request.auth.uid;
       }
 
       allow create: if isSignedIn() && 
                       isValidProposal(request.resource.data) &&
-                      request.resource.data.createdAt == request.time;
+                      request.resource.data.createdAt is string;
 
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
       
@@ -43,7 +51,7 @@ service cloud.firestore {
                       isValidProposal(request.resource.data) &&
                       request.resource.data.userId == resource.data.userId &&
                       request.resource.data.createdAt == resource.data.createdAt &&
-                      request.resource.data.updatedAt == request.time;
+                      request.resource.data.updatedAt is string;
 
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }

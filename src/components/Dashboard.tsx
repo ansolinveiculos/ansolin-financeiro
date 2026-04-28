@@ -40,7 +40,7 @@ export function Dashboard({ onNewProposal }: DashboardProps) {
     const saved = localStorage.getItem('ansolin_recent');
     return saved ? JSON.parse(saved) : [];
   });
-  const [loading, setLoading] = useState(!localStorage.getItem('ansolin_stats'));
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function fetchStats() {
@@ -79,15 +79,15 @@ export function Dashboard({ onNewProposal }: DashboardProps) {
           limit(5)
         );
         const recentSnapshot = await getDocs(recentQ);
-        const recent = recentSnapshot.docs.map(doc => {
-          const d = doc.data();
-          return {
-            id: doc.id,
-            ...d,
-            createdAt: d.createdAt.toDate().toISOString(),
-            updatedAt: d.updatedAt.toDate().toISOString()
-          };
-        });
+      const recent = recentSnapshot.docs.map(doc => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          ...d,
+          createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toISOString() : new Date().toISOString(),
+          updatedAt: d.updatedAt?.toDate ? d.updatedAt.toDate().toISOString() : new Date().toISOString()
+        };
+      });
         
         setRecentSales(recent as any);
         localStorage.setItem('ansolin_recent', JSON.stringify(recent));
@@ -136,7 +136,7 @@ export function Dashboard({ onNewProposal }: DashboardProps) {
     },
   ];
 
-  if (loading) {
+  if (loading && stats.count === 0 && recentSales.length === 0) {
     return <div className="space-y-6 animate-pulse">
       <div className="grid grid-cols-2 gap-4">
         {[1, 2, 3, 4].map(i => <div key={i} className="h-28 bg-slate-200 rounded-2xl" />)}

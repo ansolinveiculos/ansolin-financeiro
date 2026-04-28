@@ -44,23 +44,22 @@ interface ProposalListProps {
 }
 
 export function ProposalList({ onNewProposal }: ProposalListProps) {
-  const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [proposals, setProposals] = useState<Proposal[]>(() => {
+    const cached = localStorage.getItem('ansolin_proposals');
+    return cached ? JSON.parse(cached).map((p: any) => ({
+      ...p,
+      createdAt: new Date(p.createdAt),
+      updatedAt: new Date(p.updatedAt)
+    })) : [];
+  });
+  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSale, setSelectedSale] = useState<Proposal | null>(null);
 
   const fetchProposals = async (force = false) => {
     if (!auth.currentUser) return;
     
-    const cached = localStorage.getItem('ansolin_proposals');
-    if (cached && !force) {
-      setProposals(JSON.parse(cached).map((p: any) => ({
-        ...p,
-        createdAt: new Date(p.createdAt),
-        updatedAt: new Date(p.updatedAt)
-      })));
-      setLoading(false);
-    } else {
+    if (force || proposals.length === 0) {
       setLoading(true);
     }
 
@@ -77,8 +76,8 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
         return {
           id: doc.id,
           ...d,
-          createdAt: d.createdAt.toDate().toISOString(),
-          updatedAt: d.updatedAt.toDate().toISOString()
+          createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toISOString() : new Date().toISOString(),
+          updatedAt: d.updatedAt?.toDate ? d.updatedAt.toDate().toISOString() : new Date().toISOString()
         };
       });
       

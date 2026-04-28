@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { ProposalStatus, Installment } from '../types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,7 +60,7 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
     
     for (let i = 1; i <= formData.installmentCount; i++) {
       installmentList.push({
-        id: crypto.randomUUID(),
+        id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9),
         number: i,
         dueDate: addMonths(firstDate, i - 1).toISOString(),
         value: installmentValue,
@@ -78,7 +78,11 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
 
   const handleSubmit = async (e: React.FormEvent, status: ProposalStatus) => {
     e.preventDefault();
-    if (!auth.currentUser) return;
+    
+    if (!auth.currentUser) {
+      toast.error('Sessão expirada. Por favor, recarregue a página.');
+      return;
+    }
 
     if (formData.carPrice <= 0) {
       toast.error('O valor da venda deve ser maior que zero.');
@@ -86,23 +90,87 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
     }
 
     setLoading(true);
+    const path = 'proposals';
+    console.log('Iniciando persistência no Firestore: ', path);
+    console.log('Status da rede (navigator.onLine): ', navigator.onLine);
+
     try {
-      await addDoc(collection(db, 'proposals'), {
-        ...formData,
-        installmentValue: financingDetails.installment,
-        installments: financingDetails.installmentList,
+      if (auth.currentUser) {
+        console.log('Verificando sessão e obtendo token...');
+        const token = await auth.currentUser.getIdToken(true);
+        console.log('Token atualizado gerado.');
+      }
+    } catch (e) {
+      console.error('Falha ao obter token do Firebase Auth (possível bloqueio no iframe): ', e);
+    }
+    
+    // Safety timeout to prevent infinite "Saving..." state
+    const timeout = setTimeout(() => {
+      if (loading) {
+        setLoading(false);
+        toast.error('O salvamento está demorando mais que o esperado. Verifique sua conexão ou tente novamente.');
+      }
+    }, 15000);
+
+    try {
+      // Explicitly sanitize data to ensure types match Firestore rules
+      const payload = {
+        customerName: String(formData.customerName).trim(),
+        customerCpf: String(formData.customerCpf || '').trim(),
+        carModel: String(formData.carModel).trim(),
+        carYear: Number(formData.carYear) || new Date().getFullYear(),
+        carPrice: Number(formData.carPrice) || 0,
+        downPayment: Number(formData.downPayment) || 0,
+        installmentCount: Number(formData.installmentCount) || 12,
+        interestRate: Number(formData.interestRate) || 0,
+        firstDueDate: String(formData.firstDueDate),
+        notes: String(formData.notes || '').trim(),
+        installmentValue: Number(financingDetails.installment) || 0,
+        installments: financingDetails.installmentList.map(inst => ({
+          ...inst,
+          value: Number(inst.value) || 0
+        })),
         status,
         userId: auth.currentUser.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      console.log('Payload sanitizado: ', payload);
+
+      const newDocRef = doc(collection(db, path));
       
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('TIMEOUT_FIRESTORE')), 12000);
+      });
+
+      await Promise.race([
+        setDoc(newDocRef, payload),
+        timeoutPromise
+      ]);
+      
+      clearTimeout(timeout);
+      console.log('Documento salvo com sucesso! ID: ', newDocRef.id);
       toast.success('Venda registrada com sucesso!');
-      onSuccess();
-    } catch (error) {
-      console.error('Error saving proposal:', error);
-      toast.error('Erro ao salvar venda.');
-    } finally {
+      
+      // Limpa caches
+      localStorage.removeItem('ansolin_stats');
+      localStorage.removeItem('ansolin_recent');
+      localStorage.removeItem('ansolin_proposals');
+
+      setTimeout(() => {
+        onSuccess();
+      }, 800);
+    } catch (error: any) {
+      clearTimeout(timeout);
+      console.error('CRITICAL: Error saving proposal:', error);
+      
+      if (error.message === 'TIMEOUT_FIRESTORE') {
+        const isOnline = navigator.onLine;
+        toast.error(`Falha ao conectar com o servidor${!isOnline ? ' (sem internet)' : ''}. O seu navegador ou rede bloqueou a conexão com o banco de dados. Tente usar uma Aba Anônima ou outra rede.`);
+      } else {
+        toast.error('Erro ao salvar venda: ' + (error.message || 'Verifique sua conexão.'));
+      }
       setLoading(false);
     }
   };
