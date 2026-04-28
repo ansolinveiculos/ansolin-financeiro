@@ -257,16 +257,16 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
     const total = installments.length;
     const paid = installments.filter(i => i.status === 'paid').length;
     
-    const size = 110;
-    const strokeWidth = 10;
+    const size = 115;
+    const strokeWidth = 12; // Increased by 20% (from 10)
     const radius = (size - strokeWidth) / 2;
     
     // Calculate segments
     const segmentAngle = 360 / total;
-    const gap = total > 1 ? (total > 12 ? 1 : 3) : 0; // Adjust gap based on count
+    const gap = total > 1 ? (total > 12 ? 1 : 2) : 0; 
     
     return (
-      <div className="relative flex items-center justify-center w-[110px] h-[110px] bg-white/5 rounded-full p-1 border border-white/5 shadow-inner">
+      <div className="relative flex items-center justify-center w-[115px] h-[115px] bg-white/5 rounded-full p-1 border border-white/5 shadow-inner">
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="transform -rotate-90">
           {installments.map((inst, index) => {
             const startAngle = index * segmentAngle;
@@ -279,11 +279,10 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
             today.setHours(0,0,0,0);
             const isOverdue = !isPaid && dueDate < today;
 
-            let strokeColor = "#334155"; // Slate 700 (A vencer no fundo escuro)
-            if (isPaid) strokeColor = "#84cc16"; // Emerald 500 (Pago)
-            else if (isOverdue) strokeColor = "#f43f5e"; // Rose 500 (Vencido)
+            let strokeColor = "#334155"; 
+            if (isPaid) strokeColor = "#84cc16"; 
+            else if (isOverdue) strokeColor = "#f43f5e"; 
 
-            // Convert polar to cartesian
             const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
               const angleInRadians = (angleInDegrees * Math.PI) / 180.0;
               return {
@@ -315,7 +314,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
           })}
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-sm font-black text-white/90 font-mono tracking-widest">{paid}/{total}</span>
+          <span className="text-xl font-black text-white/90 font-mono tracking-tighter">{paid}/{total}</span>
         </div>
       </div>
     );
@@ -488,10 +487,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                     </div>
                   </div>
                   
-                  <div className="flex flex-col items-center gap-3 ml-4">
-                    <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
-                      <UserIcon className="w-5 h-5" />
-                    </div>
+                  <div className="flex flex-col items-center gap-3 ml-4 self-center mt-6">
                     <PaymentProgressChart installments={selectedSale.installments || []} />
                   </div>
                 </div>
