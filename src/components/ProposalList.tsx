@@ -28,7 +28,9 @@ import {
   DollarSign,
   User as UserIcon,
   Car,
-  Trash2
+  Trash2,
+  Minus,
+  Plus
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -64,6 +66,8 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
   });
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isEditingValorParcelado, setIsEditingValorParcelado] = useState(false);
+  const [showSaldoFinal, setShowSaldoFinal] = useState(false);
   const [selectedSale, setSelectedSale] = useState<Proposal | null>(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [paymentDialog, setPaymentDialog] = useState<{
@@ -348,6 +352,44 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
     }
   };
 
+  const deleteInstallment = async (installmentId: string) => {
+    if (!selectedSale || !selectedSale.installments) return;
+    
+    // Filter out the deleted installment
+    const updatedInstallments = selectedSale.installments.filter(i => i.id !== installmentId);
+    
+    // Re-number installments
+    const renumberedInstallments = updatedInstallments.map((i, idx) => ({
+      ...i,
+      number: idx + 1
+    }));
+    
+    await persistInstallmentUpdate(selectedSale.id, renumberedInstallments);
+  };
+  
+  const addInstallment = async () => {
+    if (!selectedSale || !selectedSale.installments) return;
+    
+    const lastInstallment = selectedSale.installments[selectedSale.installments.length - 1];
+    
+    const newDueDate = new Date(lastInstallment.dueDate);
+    newDueDate.setMonth(newDueDate.getMonth() + 1);
+    
+    const newInstallment: Installment = {
+        id: crypto.randomUUID(),
+        number: selectedSale.installments.length + 1,
+        dueDate: newDueDate.toISOString(),
+        value: lastInstallment.value,
+        status: 'pending',
+        paidAmount: 0,
+        paidAt: null,
+        interest: 0
+    };
+    
+    const updatedInstallments = [...selectedSale.installments, newInstallment];
+    await persistInstallmentUpdate(selectedSale.id, updatedInstallments);
+  };
+
   const PaymentProgressChart = ({ installments }: { installments: Installment[] }) => {
     if (!installments || installments.length === 0) return null;
     
@@ -569,10 +611,47 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                     <div className="space-y-4 pt-1">
                       <div>
                         <p className="text-[14px] text-slate-400 font-black uppercase tracking-widest leading-tight">Valor Parcelado</p>
-                        <p className="text-2xl font-black tracking-tighter leading-none pt-0.5">
-                          {((selectedSale.installmentCount * selectedSale.installmentValue) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                          <span className="ml-2 text-slate-400">{selectedSale.installmentCount}X</span>
-                        </p>
+                        <div className="flex items-center gap-2">
+                          {isEditingValorParcelado ? (
+                              <input 
+                                type="number" 
+                                step="0.01"
+                                autoFocus
+                                value={selectedSale.installmentValue * selectedSale.installmentCount}
+                                className="text-2xl font-black tracking-tighter leading-none pt-0.5 bg-transparent border-b border-white/20 w-32"
+                                onBlur={() => setIsEditingValorParcelado(false)}
+                                onChange={(e) => {
+                                    // TODO: Implement actual update logic: 
+                                    // Maybe update installmentValue = newTotal / installmentCount
+                                    // and then update all installments!
+                                }}
+                              />
+                          ) : (
+                              <p 
+                                className="text-2xl font-black tracking-tighter leading-none pt-0.5 cursor-pointer hover:text-slate-300"
+                                onClick={() => setIsEditingValorParcelado(true)}
+                              >
+                                {(selectedSale.installmentValue * selectedSale.installmentCount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </p>
+                          )}
+                          <span className="text-slate-400 font-black text-xl">{selectedSale.installments?.length || 0}X</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setShowSaldoFinal(!showSaldoFinal)} className="text-slate-500 hover:text-white">
+                              {showSaldoFinal ? <Eye className="w-4 h-4" /> : <div className="relative"><Eye className="w-4 h-4"/> <div className="absolute top-1/2 left-0 w-full h-[1px] bg-slate-500 transform -rotate-45" /></div>}
+                          </button>
+                          {showSaldoFinal && (
+                            <>
+                              <p className="text-[12px] text-slate-400 font-normal uppercase tracking-widest leading-none m-0">SALDO FINAL</p>
+                              <p className="text-[12px] font-normal tracking-tighter leading-none text-slate-300">
+                                 {(selectedSale.installments?.reduce((acc, i) => acc + (i.value || 0), 0) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </p>
+                            </>
+                          )}
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 gap-3 border-t border-white/5 pt-3">
@@ -640,10 +719,11 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                           <th className="py-2 w-[100px]">Vcto</th>
                           <th className="py-2 w-[110px]">Valor</th>
                           <th className="py-2 pr-3 text-center w-[40px]">Status</th>
+                          <th className="py-2 pr-3 text-center w-[40px]">Ação</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {selectedSale.installments?.map((inst) => {
+                        {selectedSale.installments?.map((inst, index) => {
                           const dueDate = new Date(inst.dueDate);
                           dueDate.setHours(0,0,0,0);
                           const today = new Date();
@@ -692,6 +772,24 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                                 >
                                   {isPaid ? <CheckCircle2 className="w-4 h-4" /> : <RefreshCw className="w-3.5 h-3.5" />}
                                 </button>
+                              </td>
+                              <td className="py-2.5 pr-3 text-center flex items-center justify-center gap-1">
+                                {index !== selectedSale.installments.length - 1 && (
+                                  <button 
+                                     onClick={() => deleteInstallment(inst.id)}
+                                     className="text-rose-400 hover:text-rose-600 w-7 h-7 flex items-center justify-center"
+                                  >
+                                    <Minus className="w-4 h-4" />
+                                  </button>
+                                )}
+                                {index === selectedSale.installments.length - 1 && (
+                                  <button 
+                                     onClick={addInstallment}
+                                     className="text-emerald-500 hover:text-emerald-700 w-7 h-7 flex items-center justify-center"
+                                  >
+                                     <Plus className="w-4 h-4" />
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           );
