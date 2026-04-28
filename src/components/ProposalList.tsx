@@ -343,14 +343,14 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
     
     // Calculate segments
     const segmentAngle = 360 / total;
-    const gap = total > 1 ? (total > 12 ? 1.5 : 3) : 0; 
+    const gap = 0; // No gap in calculation, separators will be lines
     
     return (
       <div className="relative flex items-center justify-center w-[138px] h-[138px] bg-white/5 rounded-full p-1 border border-white/5 shadow-inner">
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="transform -rotate-90">
           {installments.map((inst, index) => {
             const startAngle = index * segmentAngle;
-            const endAngle = (index + 1) * segmentAngle - gap;
+            const endAngle = (index + 1) * segmentAngle;
             
             const isPaid = inst.status === 'paid';
             const dueDate = new Date(inst.dueDate);
@@ -382,24 +382,46 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
 
             return (
               <g key={`segment-group-${inst.id}`}>
-                {/* Borda branca fina ao redor da cor */}
-                <path
-                  d={d}
-                  fill="none"
-                  stroke="white"
-                  strokeWidth={strokeWidth + 1.2}
-                  strokeLinecap="round"
-                />
-                {/* Segmento Colorido */}
+                {/* Segmento Colorido com pontas retas */}
                 <path
                   d={d}
                   fill="none"
                   stroke={strokeColor}
                   strokeWidth={strokeWidth}
-                  strokeLinecap="round"
+                  strokeLinecap="butt"
                   className="transition-all duration-500 ease-out"
                 />
               </g>
+            );
+          })}
+
+          {/* Divisores brancos finos e retos entre as parcelas */}
+          {total > 1 && installments.map((_, index) => {
+            const angle = index * segmentAngle;
+            const innerRadius = radius - strokeWidth / 2;
+            const outerRadius = radius + strokeWidth / 2;
+            
+            const polarToCartesian = (centerX: number, centerY: number, rad: number, angleInDegrees: number) => {
+              const angleInRadians = (angleInDegrees * Math.PI) / 180.0;
+              return {
+                x: centerX + rad * Math.cos(angleInRadians),
+                y: centerY + rad * Math.sin(angleInRadians)
+              };
+            };
+            
+            const p1 = polarToCartesian(size/2, size/2, innerRadius, angle);
+            const p2 = polarToCartesian(size/2, size/2, outerRadius, angle);
+            
+            return (
+              <line
+                key={`divider-${index}`}
+                x1={p1.x}
+                y1={p1.y}
+                x2={p2.x}
+                y2={p2.y}
+                stroke="white"
+                strokeWidth="1.5"
+              />
             );
           })}
         </svg>
@@ -470,14 +492,14 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                     <CardContent className="p-4 space-y-4">
                       <div className="flex justify-between items-start">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-black text-slate-900 truncate">{sale.customerName}</p>
-                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight truncate">{sale.carModel}</p>
+                          <p className="text-[14px] font-black text-slate-900 truncate">{sale.customerName}</p>
+                          <p className="text-[14px] text-slate-500 font-bold uppercase tracking-tight truncate">{sale.carModel}</p>
                         </div>
                         <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-900 transition-colors" />
                       </div>
 
                       <div className="space-y-1.5">
-                        <div className="flex justify-between text-[9px] font-black uppercase tracking-widest leading-none">
+                        <div className="flex justify-between text-[14px] font-black uppercase tracking-widest leading-none">
                           <span className="text-emerald-500">Liquidado: {(paidTotal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                           <span className="text-slate-400">Restante: {(remaining || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                         </div>
@@ -490,12 +512,12 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                         </div>
                       </div>
 
-                      <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold">
+                      <div className="flex justify-between items-center text-[14px] text-slate-400 font-bold">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          {safeFormat(sale.createdAt, 'dd/MM/yy')}
+                          {safeFormat(sale.createdAt, 'dd/MM/yyyy')}
                         </span>
-                        <Badge variant="outline" className="text-[8px] px-1.5 py-0 border-slate-200">
+                        <Badge variant="outline" className="text-[12px] px-1.5 py-0 border-slate-200">
                           {sale.installmentCount}X PARCELAS
                         </Badge>
                       </div>
@@ -520,16 +542,16 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                 <div className="flex justify-between items-end">
                   <div className="space-y-3 flex-1 pb-1">
                     <div>
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Cliente</p>
+                      <p className="text-[14px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Cliente</p>
                       <h2 className="text-xl font-black truncate">{selectedSale.customerName}</h2>
-                      <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
+                      <p className="text-[14px] font-bold uppercase text-slate-500 tracking-wider">
                         {selectedSale.carModel}, {selectedSale.carYear}, {selectedSale.carColor || 'SEM COR'}
                       </p>
                     </div>
                     
                     <div className="space-y-4 pt-1">
                       <div>
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-tight">Valor Parcelado</p>
+                        <p className="text-[14px] text-slate-400 font-black uppercase tracking-widest leading-tight">Valor Parcelado</p>
                         <p className="text-2xl font-black tracking-tighter leading-none pt-0.5">
                           {((selectedSale.installmentCount * selectedSale.installmentValue) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                           <span className="ml-2 text-slate-400">{selectedSale.installmentCount}X</span>
@@ -590,13 +612,13 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
               </div>
 
               <div className="px-3 pb-6 pt-5">
-                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 px-3">Cronograma de Pagamentos</h3>
+                <h3 className="text-[14px] font-black uppercase tracking-widest text-slate-400 mb-4 px-3">Cronograma de Pagamentos</h3>
                 
                 <div className="bg-white rounded-3xl ring-1 ring-slate-100 overflow-hidden mx-1">
                   <div className="overflow-x-auto custom-scrollbar">
                     <table className="w-full text-left border-collapse table-fixed min-w-[340px]">
                       <thead>
-                        <tr className="text-[8px] font-black uppercase text-slate-400 border-b border-slate-50 bg-slate-50/50">
+                        <tr className="text-[14px] font-bold uppercase text-slate-400 border-b border-slate-50 bg-slate-50/50">
                           <th className="py-2 pl-3 w-[30px]">Nº</th>
                           <th className="py-2 w-[100px]">Vcto</th>
                           <th className="py-2 w-[110px]">Valor</th>
@@ -616,15 +638,20 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                           const rowColor = isPaid ? 'text-slate-900' : (isOverdue ? 'text-rose-600' : 'text-slate-400');
 
                           return (
-                            <tr key={inst.id} className={cn("text-[10px] font-normal transition-colors group", rowColor)}>
+                            <tr key={inst.id} className={cn("text-[14px] font-normal transition-colors group", rowColor)}>
                               <td className="py-2.5 pl-3 font-bold">{String(inst.number).padStart(2, '0')}</td>
                               <td className="py-2.5">
-                                <input 
-                                  type="date" 
-                                  value={inst.dueDate ? new Date(inst.dueDate).toISOString().split('T')[0] : ''} 
-                                  className="bg-transparent border-none p-0 focus:ring-0 w-full text-inherit font-inherit cursor-pointer hover:underline decoration-dotted"
-                                  onChange={(e) => updateInstallmentField(selectedSale.id, inst.id, 'dueDate', new Date(e.target.value + 'T12:00:00').toISOString())}
-                                />
+                                <div className="relative group/date">
+                                  <span className="block hover:underline decoration-dotted cursor-pointer">
+                                    {safeFormat(inst.dueDate, 'dd/MM/yyyy')}
+                                  </span>
+                                  <input 
+                                    type="date" 
+                                    value={inst.dueDate ? new Date(inst.dueDate).toISOString().split('T')[0] : ''} 
+                                    className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                                    onChange={(e) => updateInstallmentField(selectedSale.id, inst.id, 'dueDate', new Date(e.target.value + 'T12:00:00').toISOString())}
+                                  />
+                                </div>
                               </td>
                               <td className="py-2.5">
                                 <div className="flex items-center gap-0.5">
@@ -678,7 +705,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                   </div>
                 ) : (
                   <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 h-11 rounded-2xl border-slate-200 text-slate-900 text-xs font-bold" onClick={() => setSelectedSale(null)}>
+                    <Button variant="outline" className="flex-1 h-11 rounded-2xl border-slate-200 text-slate-900 text-[14px] font-bold" onClick={() => setSelectedSale(null)}>
                       Fechar Detalhes
                     </Button>
                     <Button 
@@ -703,7 +730,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">Data do Pagamento</p>
+              <p className="text-[14px] font-black uppercase text-slate-400 tracking-widest leading-none">Data do Pagamento</p>
               <Input 
                 type="date" 
                 value={paymentDialog.paymentDate}
@@ -712,7 +739,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
               />
             </div>
             <div className="space-y-1.5">
-              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">Valor Pago</p>
+              <p className="text-[14px] font-black uppercase text-slate-400 tracking-widest leading-none">Valor Pago</p>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
                 <Input 
