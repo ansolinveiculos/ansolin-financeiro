@@ -166,12 +166,11 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
     // Toggle back to pending
     const updatedInstallments = sale.installments.map(i => {
       if (i.id === installmentId) {
+        const { paidAmount: _pa, interest: _in, ...rest } = i;
         return { 
-          ...i, 
+          ...rest, 
           status: 'pending',
-          paidAt: null,
-          paidAmount: undefined,
-          interest: undefined
+          paidAt: null
         } as Installment;
       }
       return i;
@@ -226,6 +225,11 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
     const newProposals = proposals.map(p => p.id === saleId ? updatedProposal : p);
     setProposals(newProposals);
     localStorage.setItem('ansolin_proposals', JSON.stringify(newProposals));
+
+    // Remove undefined values for Firestore
+    const sanitizedInstallments = updatedInstallments.map(inst => 
+      Object.fromEntries(Object.entries(inst).filter(([_, v]) => v !== undefined))
+    );
     
     const summary = newProposals.reduce((acc: any, curr: any) => {
       acc.totalVendido += (curr.carPrice || 0);
@@ -246,7 +250,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
     try {
       const docRef = doc(db, 'proposals', saleId);
       await updateDoc(docRef, {
-        installments: updatedInstallments,
+        installments: sanitizedInstallments,
         updatedAt: serverTimestamp()
       });
       toast.success('Status da parcela atualizado!');
@@ -339,7 +343,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
     
     // Calculate segments
     const segmentAngle = 360 / total;
-    const gap = total > 1 ? (total > 12 ? 1 : 2) : 0; 
+    const gap = total > 1 ? (total > 12 ? 1.5 : 3) : 0; 
     
     return (
       <div className="relative flex items-center justify-center w-[138px] h-[138px] bg-white/5 rounded-full p-1 border border-white/5 shadow-inner">
@@ -377,15 +381,25 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
             ].join(" ");
 
             return (
-              <path
-                key={inst.id}
-                d={d}
-                fill="none"
-                stroke={strokeColor}
-                strokeWidth={strokeWidth}
-                strokeLinecap="round"
-                className="transition-all duration-500 ease-out"
-              />
+              <g key={`segment-group-${inst.id}`}>
+                {/* Borda branca fina ao redor da cor */}
+                <path
+                  d={d}
+                  fill="none"
+                  stroke="white"
+                  strokeWidth={strokeWidth + 1.2}
+                  strokeLinecap="round"
+                />
+                {/* Segmento Colorido */}
+                <path
+                  d={d}
+                  fill="none"
+                  stroke={strokeColor}
+                  strokeWidth={strokeWidth}
+                  strokeLinecap="round"
+                  className="transition-all duration-500 ease-out"
+                />
+              </g>
             );
           })}
         </svg>
