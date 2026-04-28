@@ -257,8 +257,8 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
     const total = installments.length;
     const paid = installments.filter(i => i.status === 'paid').length;
     
-    const size = 115;
-    const strokeWidth = 12; // Increased by 20% (from 10)
+    const size = 138;
+    const strokeWidth = 14; // Increased proportionally
     const radius = (size - strokeWidth) / 2;
     
     // Calculate segments
@@ -266,7 +266,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
     const gap = total > 1 ? (total > 12 ? 1 : 2) : 0; 
     
     return (
-      <div className="relative flex items-center justify-center w-[115px] h-[115px] bg-white/5 rounded-full p-1 border border-white/5 shadow-inner">
+      <div className="relative flex items-center justify-center w-[138px] h-[138px] bg-white/5 rounded-full p-1 border border-white/5 shadow-inner">
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="transform -rotate-90">
           {installments.map((inst, index) => {
             const startAngle = index * segmentAngle;
@@ -469,19 +469,19 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                           return (
                             <>
                               <div>
-                                <p className="text-[16px] text-slate-500 font-black uppercase tracking-widest leading-tight">Pagas</p>
+                                <p className="text-[16px] text-white font-black uppercase tracking-widest leading-tight">Pagas</p>
                                 <p className="text-[16px] font-black text-emerald-400 leading-none pt-1">
                                   {paid.length} = {sum(paid)}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[16px] text-slate-500 font-black uppercase tracking-widest leading-tight">Em Atraso</p>
+                                <p className="text-[16px] text-white font-black uppercase tracking-widest leading-tight">Em Atraso</p>
                                 <p className="text-[16px] font-black text-rose-400 leading-none pt-1">
                                   {overdue.length} = {sum(overdue)}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[16px] text-slate-500 font-black uppercase tracking-widest leading-tight">A Vencer</p>
+                                <p className="text-[16px] text-white font-black uppercase tracking-widest leading-tight">A Vencer</p>
                                 <p className="text-[16px] font-black text-slate-300 leading-none pt-1">
                                   {pending.length} = {sum(pending)}
                                 </p>
