@@ -35,8 +35,12 @@ export default function App() {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error('Login error:', error);
+    } catch (error: any) {
+      if (error.code === 'auth/cancelled-popup-request') {
+        console.log('Login popup cancelled by user.');
+      } else {
+        console.error('Login error:', error);
+      }
     }
   };
 

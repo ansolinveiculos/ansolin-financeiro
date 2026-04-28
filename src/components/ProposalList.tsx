@@ -202,15 +202,32 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
       status: 'paid',
       paidAt,
       paidAmount,
+      value: paidAmount, // Atualiza o valor da parcela para o valor pago
       interest: diff > 0 ? diff : 0
     };
 
-    if (diff < 0 && currentIndex < updatedInstallments.length - 1) {
-      const nextIndex = currentIndex + 1;
-      updatedInstallments[nextIndex] = {
-        ...updatedInstallments[nextIndex],
-        value: updatedInstallments[nextIndex].value + Math.abs(diff)
-      };
+    if (diff < 0) {
+      if (currentIndex < updatedInstallments.length - 1) {
+        // Underpaid, add difference to next installment
+        const nextIndex = currentIndex + 1;
+        updatedInstallments[nextIndex] = {
+          ...updatedInstallments[nextIndex],
+          value: updatedInstallments[nextIndex].value + Math.abs(diff)
+        };
+      } else {
+        // Last installment underpaid, create a new installment for the remainder
+        const newInstallment: Installment = {
+          id: crypto.randomUUID(),
+          number: updatedInstallments.length + 1,
+          dueDate: new Date(new Date(currentInst.dueDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          value: Math.abs(diff),
+          status: 'pending',
+          paidAmount: 0,
+          paidAt: null,
+          interest: 0
+        };
+        updatedInstallments.push(newInstallment);
+      }
     }
 
     setPaymentDialog(prev => ({ ...prev, isOpen: false }));
