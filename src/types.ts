@@ -10,6 +10,7 @@ export interface Installment {
   id: string;
   number: number;
   dueDate: string;
+  paidAt?: string | null;
   value: number;
   status: 'pending' | 'paid';
 }

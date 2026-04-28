@@ -132,11 +132,17 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
     const sale = proposals.find(p => p.id === saleId);
     if (!sale || !sale.installments) return;
 
-    const updatedInstallments = sale.installments.map(inst => 
-      inst.id === installmentId 
-        ? { ...inst, status: inst.status === 'paid' ? 'pending' : 'paid' } as Installment
-        : inst
-    );
+    const updatedInstallments = sale.installments.map(inst => {
+      if (inst.id === installmentId) {
+        const newStatus = inst.status === 'paid' ? 'pending' : 'paid';
+        return { 
+          ...inst, 
+          status: newStatus,
+          paidAt: newStatus === 'paid' ? (inst.paidAt || new Date().toISOString()) : null
+        } as Installment;
+      }
+      return inst;
+    });
 
     // Update locally
     const updatedProposal = { ...sale, installments: updatedInstallments };
@@ -172,6 +178,43 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
       console.error('Error updating installment:', error);
       toast.error('Erro ao salvar alteração.');
       fetchProposals(true); // Revert
+    }
+  };
+
+  const updateInstallmentField = async (saleId: string, installmentId: string, field: keyof Installment, value: any) => {
+    const sale = proposals.find(p => p.id === saleId);
+    if (!sale || !sale.installments) return;
+
+    const updatedInstallments = sale.installments.map(inst => {
+      if (inst.id === installmentId) {
+        const updated = { ...inst, [field]: value };
+        // If paidAt is set, ensure status is paid
+        if (field === 'paidAt' && value) {
+          updated.status = 'paid';
+        }
+        return updated;
+      }
+      return inst;
+    });
+
+    // Update locally
+    const updatedProposal = { ...sale, installments: updatedInstallments };
+    const newProposals = proposals.map(p => p.id === saleId ? updatedProposal : p);
+    setProposals(newProposals);
+    localStorage.setItem('ansolin_proposals', JSON.stringify(newProposals));
+    
+    if (selectedSale?.id === saleId) setSelectedSale(updatedProposal);
+
+    try {
+      const docRef = doc(db, 'proposals', saleId);
+      await updateDoc(docRef, {
+        installments: updatedInstallments,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error updating installment field:', error);
+      toast.error('Erro ao salvar alteração.');
+      fetchProposals(true); 
     }
   };
 
@@ -339,36 +382,84 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
 
               <div className="p-6">
                 <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Cronograma de Pagamentos</h3>
-                <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
-                  {selectedSale.installments?.map((inst) => (
-                    <div 
-                      key={inst.id}
-                      className={cn(
-                        "flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer",
-                        inst.status === 'paid' ? "bg-emerald-50 border-emerald-100" : "bg-white border-slate-100"
-                      )}
-                      onClick={() => toggleInstallmentStatus(selectedSale.id, inst.id)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black",
-                          inst.status === 'paid' ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-500"
-                        )}>
-                          {inst.number}
-                        </div>
-                        <div>
-                          <p className="text-xs font-black text-slate-900">{(inst.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                          <p className="text-[10px] text-slate-500 font-bold uppercase">{safeFormat(inst.dueDate, 'dd MMMM yyyy', { locale: ptBR })}</p>
-                        </div>
-                      </div>
-                      <div className={cn(
-                        "p-1.5 rounded-full",
-                        inst.status === 'paid' ? "text-emerald-500" : "text-slate-300"
-                      )}>
-                        {inst.status === 'paid' ? <CheckCircle2 className="w-5 h-5 fill-emerald-50" /> : <RefreshCw className="w-5 h-5" />}
-                      </div>
-                    </div>
-                  ))}
+                
+                <div className="bg-white rounded-3xl ring-1 ring-slate-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="text-[9px] font-black uppercase text-slate-400 border-b border-slate-50 bg-slate-50/50">
+                          <th className="py-2 pl-4">Parc</th>
+                          <th className="py-2">Dt Vcto</th>
+                          <th className="py-2">Dt Pgto</th>
+                          <th className="py-2">Valor</th>
+                          <th className="py-2 pr-4 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {selectedSale.installments?.map((inst) => {
+                          const dueDate = new Date(inst.dueDate);
+                          dueDate.setHours(0,0,0,0);
+                          const today = new Date();
+                          today.setHours(0,0,0,0);
+                          
+                          const isPaid = inst.status === 'paid';
+                          const isOverdue = !isPaid && dueDate < today;
+                          
+                          const rowColor = isPaid ? 'text-slate-900' : (isOverdue ? 'text-rose-600' : 'text-slate-400');
+
+                          return (
+                            <tr key={inst.id} className={cn("text-[11px] font-bold transition-colors group", rowColor)}>
+                              <td className="py-2.5 pl-4 font-black">{String(inst.number).padStart(2, '0')}</td>
+                              <td className="py-2.5">
+                                <input 
+                                  type="date" 
+                                  value={inst.dueDate ? new Date(inst.dueDate).toISOString().split('T')[0] : ''} 
+                                  className="bg-transparent border-none p-0 focus:ring-0 w-[90px] text-inherit font-inherit cursor-pointer hover:underline decoration-dotted"
+                                  onChange={(e) => updateInstallmentField(selectedSale.id, inst.id, 'dueDate', new Date(e.target.value + 'T12:00:00').toISOString())}
+                                />
+                              </td>
+                              <td className="py-2.5">
+                                <input 
+                                  type="date" 
+                                  value={inst.paidAt ? new Date(inst.paidAt).toISOString().split('T')[0] : ''} 
+                                  className={cn(
+                                    "bg-transparent border-none p-0 focus:ring-0 w-[90px] text-inherit font-inherit cursor-pointer hover:underline decoration-dotted",
+                                    !inst.paidAt && "text-slate-200"
+                                  )}
+                                  onChange={(e) => {
+                                    const val = e.target.value ? new Date(e.target.value + 'T12:00:00').toISOString() : null;
+                                    updateInstallmentField(selectedSale.id, inst.id, 'paidAt', val);
+                                  }}
+                                />
+                              </td>
+                              <td className="py-2.5">
+                                <div className="flex items-center gap-0.5">
+                                  <span className="opacity-50 font-medium">R$</span>
+                                  <input 
+                                    type="number" 
+                                    value={inst.value} 
+                                    className="bg-transparent border-none p-0 focus:ring-0 w-16 text-inherit font-black"
+                                    onChange={(e) => updateInstallmentField(selectedSale.id, inst.id, 'value', Number(e.target.value))}
+                                  />
+                                </div>
+                              </td>
+                              <td className="py-2.5 pr-4 text-center">
+                                <button 
+                                  onClick={() => toggleInstallmentStatus(selectedSale.id, inst.id)}
+                                  className={cn(
+                                    "w-6 h-6 rounded-full flex items-center justify-center transition-all mx-auto",
+                                    isPaid ? "bg-emerald-500 text-white shadow-sm shadow-emerald-200" : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                                  )}
+                                >
+                                  {isPaid ? <CheckCircle2 className="w-3.5 h-3.5" /> : <RefreshCw className="w-3 h-3" />}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
               
