@@ -25,15 +25,21 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onNewProposal }: DashboardProps) {
-  const [stats, setStats] = useState({
-    total: 0,
-    pending: 0,
-    approved: 0,
-    rejected: 0,
-    totalValue: 0
+  const [stats, setStats] = useState(() => {
+    const saved = localStorage.getItem('ansolin_stats');
+    return saved ? JSON.parse(saved) : {
+      total: 0,
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      totalValue: 0
+    };
   });
-  const [recentProposals, setRecentProposals] = useState<Proposal[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [recentProposals, setRecentProposals] = useState<Proposal[]>(() => {
+    const saved = localStorage.getItem('ansolin_recent');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [loading, setLoading] = useState(!localStorage.getItem('ansolin_stats'));
 
   useEffect(() => {
     async function fetchStats() {
@@ -57,6 +63,7 @@ export function Dashboard({ onNewProposal }: DashboardProps) {
         }, { total: 0, pending: 0, approved: 0, rejected: 0, totalValue: 0 });
 
         setStats(summary);
+        localStorage.setItem('ansolin_stats', JSON.stringify(summary));
 
         // Fetch recent
         const recentQ = query(
@@ -66,15 +73,18 @@ export function Dashboard({ onNewProposal }: DashboardProps) {
           limit(5)
         );
         const recentSnapshot = await getDocs(recentQ);
-        setRecentProposals(recentSnapshot.docs.map(doc => {
+        const recent = recentSnapshot.docs.map(doc => {
           const d = doc.data();
           return {
             id: doc.id,
             ...d,
-            createdAt: d.createdAt.toDate(),
-            updatedAt: d.updatedAt.toDate()
-          } as Proposal;
-        }));
+            createdAt: d.createdAt.toDate().toISOString(),
+            updatedAt: d.updatedAt.toDate().toISOString()
+          };
+        });
+        
+        setRecentProposals(recent as any);
+        localStorage.setItem('ansolin_recent', JSON.stringify(recent));
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
