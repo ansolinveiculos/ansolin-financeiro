@@ -41,7 +41,7 @@ export function Layout({ children, currentView, onViewChange, user, onLogout }: 
           <div className="bg-slate-900 p-2 rounded-lg">
             <CircleDollarSign className="w-6 h-6 text-white" />
           </div>
-          {sidebarOpen && <span className="font-bold text-xl tracking-tight text-slate-900">Vendas Credito</span>}
+          {sidebarOpen && <span className="font-bold text-xl tracking-tight text-slate-900">ANSOLIN FINANCEIRO</span>}
         </div>
 
         <nav className="flex-1 px-4 space-y-2 py-4">
@@ -103,7 +103,7 @@ export function Layout({ children, currentView, onViewChange, user, onLogout }: 
               <Menu className="w-5 h-5" />
             </Button>
             <h2 className="text-lg font-semibold text-slate-900 capitalize">
-              {navItems.find(i => i.id === currentView)?.label || 'Vendas Credito'}
+              {navItems.find(i => i.id === currentView)?.label || 'ANSOLIN FINANCEIRO'}
             </h2>
           </div>
           

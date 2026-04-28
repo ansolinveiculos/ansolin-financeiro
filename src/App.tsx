@@ -67,7 +67,7 @@ export default function App() {
             </div>
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Vendas Credito</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">ANSOLIN FINANCEIRO</h1>
             <p className="mt-2 text-slate-500">Gestão profissional de financiamentos para sua concessionária.</p>
           </div>
           <Button onClick={handleLogin} className="w-full h-12 text-lg font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-lg transition-all">
