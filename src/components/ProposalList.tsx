@@ -423,24 +423,24 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
         setSelectedSale(null);
         setIsConfirmingDelete(false);
       }}>
-        <DialogContent className="max-w-md w-[95%] rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+        <DialogContent className="max-w-md w-[95%] rounded-3xl p-0 overflow-hidden border-none shadow-2xl max-h-[96vh] flex flex-col">
           {selectedSale && (
-            <div className="bg-[#F8FAFC]">
-              <div className="bg-slate-900 p-6 text-white">
-                <div className="flex justify-between items-start">
-                  <div className="space-y-4 flex-1">
+            <div className="flex-1 overflow-y-auto bg-[#F8FAFC] custom-scrollbar">
+              <div className="bg-slate-900 p-5 text-white">
+                <div className="flex justify-between items-end">
+                  <div className="space-y-3 flex-1 pb-1">
                     <div>
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Cliente</p>
-                      <h2 className="text-xl font-black">{selectedSale.customerName}</h2>
+                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Cliente</p>
+                      <h2 className="text-xl font-black truncate">{selectedSale.customerName}</h2>
                     </div>
                     
-                    <div className="space-y-4 pt-2">
+                    <div className="space-y-4 pt-1">
                       <div>
                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-tight">Valor Parcelado</p>
-                        <p className="text-lg font-black tracking-tight leading-none pt-0.5">{((selectedSale.installmentCount * selectedSale.installmentValue) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                        <p className="text-2xl font-black tracking-tighter leading-none pt-0.5">{((selectedSale.installmentCount * selectedSale.installmentValue) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-2 border-t border-white/5 pt-3">
+                      <div className="grid grid-cols-1 gap-3 border-t border-white/5 pt-3">
                         {(() => {
                           const insts = selectedSale.installments || [];
                           const today = new Date();
@@ -463,20 +463,20 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                           return (
                             <>
                               <div>
-                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Pagas</p>
-                                <p className="text-[11px] font-bold text-emerald-400">
+                                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest leading-tight">Pagas</p>
+                                <p className="text-base font-black text-emerald-400 leading-none pt-0.5">
                                   {paid.length} = {sum(paid)}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Em Atraso</p>
-                                <p className="text-[11px] font-bold text-rose-400">
+                                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest leading-tight">Em Atraso</p>
+                                <p className="text-base font-black text-rose-400 leading-none pt-0.5">
                                   {overdue.length} = {sum(overdue)}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">A Vencer</p>
-                                <p className="text-[11px] font-bold text-slate-300">
+                                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest leading-tight">A Vencer</p>
+                                <p className="text-base font-black text-slate-300 leading-none pt-0.5">
                                   {pending.length} = {sum(pending)}
                                 </p>
                               </div>
@@ -487,13 +487,13 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                     </div>
                   </div>
                   
-                  <div className="flex flex-col items-center gap-3 ml-4 self-center mt-6">
+                  <div className="flex flex-col items-center gap-3 ml-2 pb-0">
                     <PaymentProgressChart installments={selectedSale.installments || []} />
                   </div>
                 </div>
               </div>
 
-              <div className="px-3 pb-6 pt-6">
+              <div className="px-3 pb-6 pt-5">
                 <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 px-3">Cronograma de Pagamentos</h3>
                 
                 <div className="bg-white rounded-3xl ring-1 ring-slate-100 overflow-hidden mx-1">
