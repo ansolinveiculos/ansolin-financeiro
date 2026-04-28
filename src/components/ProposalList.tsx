@@ -459,24 +459,26 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                             return i.status !== 'paid' && date >= today;
                           });
 
+                          const sum = (arr: Installment[]) => arr.reduce((acc, curr) => acc + (curr.value || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
                           return (
                             <>
                               <div>
-                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Parcelas Pagas</p>
+                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Pagas</p>
                                 <p className="text-[11px] font-bold text-emerald-400">
-                                  {paid.length} x {(selectedSale.installmentValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                  {paid.length} = {sum(paid)}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Parcelas Vencidas</p>
+                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Em Atraso</p>
                                 <p className="text-[11px] font-bold text-rose-400">
-                                  {overdue.length} x {(selectedSale.installmentValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                  {overdue.length} = {sum(overdue)}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Parcelas em Aberto</p>
+                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">A Vencer</p>
                                 <p className="text-[11px] font-bold text-slate-300">
-                                  {pending.length} x {(selectedSale.installmentValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                  {pending.length} = {sum(pending)}
                                 </p>
                               </div>
                             </>
