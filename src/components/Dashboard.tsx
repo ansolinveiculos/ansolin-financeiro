@@ -262,16 +262,23 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
                     onClick={() => onSelectSale(sale.id)}
                   >
                     <Card className="border-none shadow-sm ring-1 ring-slate-100 overflow-hidden bg-white active:scale-[0.98] transition-all cursor-pointer group">
-                      <CardContent className="p-3.5 space-y-3">
+                      <CardContent className="pt-2 pb-1.5 px-3.5 space-y-2">
                         <div className="flex justify-between items-start">
                           <div className="flex-1 min-w-0">
-                            <p className="text-[14px] font-black text-slate-900 truncate leading-tight">{sale.customerName}</p>
-                            <p className="text-[12px] text-slate-500 font-bold uppercase tracking-tight truncate">{sale.carModel}</p>
+                            <div className="flex items-baseline gap-2 overflow-hidden">
+                              <p className="text-[14px] font-black text-slate-900 truncate flex-shrink-0 max-w-[55%]">{sale.customerName}</p>
+                              {sale.customerPhone && (
+                                <p className="text-[14px] font-normal text-slate-400 truncate tracking-tight">{sale.customerPhone}</p>
+                              )}
+                            </div>
+                            <p className="text-[12px] text-slate-500 font-normal uppercase tracking-tight truncate leading-tight mt-0.5">
+                              {sale.carModel}{sale.carYear ? ` / ${sale.carYear}` : ''}{sale.carColor ? ` / ${sale.carColor}` : ''}
+                            </p>
                           </div>
                           <ChevronRight className="w-4 h-4 text-slate-300 mt-0.5 group-hover:text-slate-900 transition-colors" />
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           <div className="grid grid-cols-3 gap-2">
                             <div className="space-y-0 text-left">
                               <p className="text-[9px] font-black uppercase tracking-wider text-emerald-500">Pagas</p>
@@ -316,7 +323,7 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
                           </div>
                         </div>
 
-                        <div className="flex justify-between items-center text-[11px] text-slate-400 font-bold">
+                        <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold border-t border-slate-50 pt-1.5">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
                             {safeFormat(sale.createdAt, 'dd/MM/yyyy')}
