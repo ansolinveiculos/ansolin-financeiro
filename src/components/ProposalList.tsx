@@ -427,8 +427,8 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
     const total = installments.length;
     const paid = installments.filter(i => i.status === 'paid').length;
     
-    const size = 138;
-    const strokeWidth = 14; // Increased proportionally
+    const size = 100;
+    const strokeWidth = 10; // Adjusted for smaller size
     const radius = (size - strokeWidth) / 2;
     
     // Calculate segments
@@ -436,7 +436,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
     const gap = 0; // No gap in calculation, separators will be lines
     
     return (
-      <div className="relative flex items-center justify-center w-[138px] h-[138px] bg-white/5 rounded-full p-1 border border-white/5 shadow-inner">
+      <div className="relative flex items-center justify-center w-[100px] h-[100px] bg-white/5 rounded-full p-1 border border-white/5 shadow-inner shrink-0">
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="transform -rotate-90">
           {installments.map((inst, index) => {
             const startAngle = index * segmentAngle;
@@ -516,7 +516,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
           })}
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-[32px] font-black text-white/90 font-mono tracking-tighter">{paid}/{total}</span>
+          <span className="text-[20px] font-black text-white/90 font-mono tracking-tighter">{paid}/{total}</span>
         </div>
       </div>
     );
@@ -577,7 +577,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                     <XCircle className="w-5 h-5" />
                   </Button>
                 </div>
-                <div className="flex justify-between items-end">
+                <div className="flex flex-col space-y-4">
                   <div className="space-y-3 flex-1 pb-1">
                     <div>
                       <p className="text-[14px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Cliente</p>
@@ -659,59 +659,58 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-3 border-t border-white/5 pt-3">
-                        {(() => {
-                          const insts = selectedSale.installments || [];
-                          const today = new Date();
-                          today.setHours(0,0,0,0);
+                      <div className="flex items-center gap-4 border-t border-white/5 pt-3">
+                        <div className="flex-1 grid grid-cols-1 gap-2">
+                          {(() => {
+                            const insts = selectedSale.installments || [];
+                            const today = new Date();
+                            today.setHours(0,0,0,0);
 
-                          const paid = insts.filter(i => i.status === 'paid');
-                          const overdue = insts.filter(i => {
-                            const date = new Date(i.dueDate);
-                            date.setHours(0,0,0,0);
-                            return i.status !== 'paid' && date < today;
-                          });
-                          const pending = insts.filter(i => {
-                            const date = new Date(i.dueDate);
-                            date.setHours(0,0,0,0);
-                            return i.status !== 'paid' && date >= today;
-                          });
+                            const paid = insts.filter(i => i.status === 'paid');
+                            const overdue = insts.filter(i => {
+                              const date = new Date(i.dueDate);
+                              date.setHours(0,0,0,0);
+                              return i.status !== 'paid' && date < today;
+                            });
+                            const pending = insts.filter(i => {
+                              const date = new Date(i.dueDate);
+                              date.setHours(0,0,0,0);
+                              return i.status !== 'paid' && date >= today;
+                            });
 
-                          const sum = (arr: Installment[]) => arr.reduce((acc, curr) => acc + (curr.value || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                            const sum = (arr: Installment[]) => arr.reduce((acc, curr) => acc + (curr.value || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 
-                          return (
-                            <>
-                              <div>
-                                <p className="text-[14px] text-white font-normal uppercase tracking-widest leading-tight">Pagas</p>
-                                <p className="text-[14px] font-normal text-emerald-400 leading-none pt-1">
-                                  {paid.length} = {sum(paid)}
-                                </p>
-                              </div>
-                              {overdue.length > 0 && (
-                                <div>
-                                  <p className="text-[14px] text-white font-normal uppercase tracking-widest leading-tight">Em Atraso</p>
-                                  <p className="text-[14px] font-normal text-rose-400 leading-none pt-1">
-                                    {overdue.length} = {sum(overdue)}
+                            return (
+                              <>
+                                <div className="leading-tight">
+                                  <p className="text-[11px] text-slate-400 font-normal uppercase tracking-widest">Pagas</p>
+                                  <p className="text-[14px] font-black text-emerald-400">
+                                    {paid.length} = {sum(paid)}
                                   </p>
                                 </div>
-                              )}
-                              {pending.length > 0 && (
-                                <div>
-                                  <p className="text-[14px] text-white font-normal uppercase tracking-widest leading-tight">A Vencer</p>
-                                  <p className="text-[14px] font-normal text-slate-300 leading-none pt-1">
-                                    {pending.length} = {sum(pending)}
-                                  </p>
-                                </div>
-                              )}
-                            </>
-                          );
-                        })()}
+                                {overdue.length > 0 && (
+                                  <div className="leading-tight">
+                                    <p className="text-[11px] text-slate-400 font-normal uppercase tracking-widest">Em Atraso</p>
+                                    <p className="text-[14px] font-black text-rose-400">
+                                      {overdue.length} = {sum(overdue)}
+                                    </p>
+                                  </div>
+                                )}
+                                {pending.length > 0 && (
+                                  <div className="leading-tight">
+                                    <p className="text-[11px] text-slate-400 font-normal uppercase tracking-widest">A Vencer</p>
+                                    <p className="text-[14px] font-black text-slate-300">
+                                      {pending.length} = {sum(pending)}
+                                    </p>
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                        <PaymentProgressChart installments={selectedSale.installments || []} />
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="flex flex-col items-center gap-3 ml-2 pb-0">
-                    <PaymentProgressChart installments={selectedSale.installments || []} />
                   </div>
                 </div>
               </div>
