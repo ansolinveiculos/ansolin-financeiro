@@ -19,6 +19,7 @@ import {
   Info,
   CheckCircle2
 } from 'lucide-react';
+import { IMaskInput } from 'react-imask';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { format, addMonths } from 'date-fns';
@@ -462,11 +463,20 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">1º Vencimento</Label>
-                  <Input 
-                    type="date"
-                    className="h-11 bg-slate-50/50 border-slate-200 rounded-xl text-base"
-                    value={formData.firstDueDate}
-                    onChange={e => updateField('firstDueDate', e.target.value)}
+                  <IMaskInput
+                    mask="00/00/00"
+                    value={format(new Date(formData.firstDueDate + 'T12:00:00'), 'dd/MM/yy')}
+                    onAccept={(value) => {
+                      if (value.length === 8) {
+                        const [d, m, y] = value.split('/');
+                        const fullYear = parseInt(y) + 2000;
+                        const isoDate = `${fullYear}-${m}-${d}`;
+                        if (isoDate !== formData.firstDueDate) {
+                          updateField('firstDueDate', isoDate);
+                        }
+                      }
+                    }}
+                    className="flex h-11 w-full rounded-xl bg-slate-50/50 border border-slate-200 px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
               </div>

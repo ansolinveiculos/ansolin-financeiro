@@ -81,7 +81,6 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
           
           const summary = data.reduce((acc, curr: any) => {
             acc.totalVendido += (curr.carPrice || 0);
-            acc.recebido += (curr.downPayment || 0);
             acc.count++;
             
             if (curr.installments) {
@@ -124,28 +123,12 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
 
   const kpis = [
     { 
-      label: 'Recebido', 
-      value: (stats.recebido || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), 
-      icon: CheckCircle2, 
-      color: 'text-emerald-500', 
-      bg: 'bg-emerald-50',
-      desc: 'Soma de entradas e parcelas pagas'
-    },
-    { 
       label: 'A Receber', 
       value: (stats.aReceber || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), 
       icon: Clock, 
       color: 'text-amber-500', 
       bg: 'bg-amber-50',
       desc: 'Total de parcelas em aberto'
-    },
-    { 
-      label: 'Total em Vendas', 
-      value: (stats.totalVendido || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), 
-      icon: TrendingUp, 
-      color: 'text-blue-500', 
-      bg: 'bg-blue-50',
-      desc: 'Valor total negociado'
     },
     { 
       label: 'Volume de Vendas', 
@@ -200,7 +183,7 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
   if (loading && stats.count === 0 && recentSales.length === 0) {
     return <div className="space-y-6 animate-pulse">
       <div className="grid grid-cols-2 gap-4">
-        {[1, 2, 3, 4].map(i => <div key={i} className="h-28 bg-slate-200 rounded-2xl" />)}
+        {[1, 2].map(i => <div key={i} className="h-28 bg-slate-200 rounded-2xl" />)}
       </div>
       <div className="h-64 bg-slate-200 rounded-2xl" />
     </div>;

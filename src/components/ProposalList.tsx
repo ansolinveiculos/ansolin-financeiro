@@ -38,6 +38,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { IMaskInput } from 'react-imask';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 
@@ -697,14 +698,23 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                                 <div className="flex items-center justify-start gap-2 whitespace-nowrap">
                                   {String(inst.number).padStart(2, '0')} <span>-</span>
                                   <div className="relative group/date">
-                                    <span className="block hover:underline decoration-dotted cursor-pointer">
-                                      {safeFormat(inst.dueDate, 'dd/MM/yy')}
-                                    </span>
-                                    <input 
-                                      type="date" 
-                                      value={inst.dueDate ? new Date(inst.dueDate).toISOString().split('T')[0] : ''} 
-                                      className="absolute inset-0 opacity-0 cursor-pointer w-full text-[16px]"
-                                      onChange={(e) => updateInstallmentField(selectedSale.id, inst.id, 'dueDate', new Date(e.target.value + 'T12:00:00').toISOString())}
+                                    <IMaskInput 
+                                      mask="00/00/00"
+                                      value={safeFormat(inst.dueDate, 'dd/MM/yy')}
+                                      onAccept={(value) => {
+                                        if (value.length === 8) {
+                                          const [d, m, y] = value.split('/');
+                                          const fullYear = parseInt(y) + 2000;
+                                          const isoDate = `${fullYear}-${m}-${d}T12:00:00.000Z`;
+                                          
+                                          // Only update if it's a valid completion
+                                          const currentFormatted = safeFormat(inst.dueDate, 'dd/MM/yy');
+                                          if (value !== currentFormatted) {
+                                            updateInstallmentField(selectedSale.id, inst.id, 'dueDate', isoDate);
+                                          }
+                                        }
+                                      }}
+                                      className="bg-transparent border-none p-0 focus:ring-0 w-20 text-left text-[14px] text-inherit font-medium hover:underline decoration-dotted cursor-pointer"
                                     />
                                   </div>
                                 </div>
@@ -805,11 +815,18 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
           <div className="space-y-4">
             <div className="space-y-1.5">
               <p className="text-[14px] font-black uppercase text-slate-400 tracking-widest leading-none">Data do Pagamento</p>
-              <Input 
-                type="date" 
-                value={paymentDialog.paymentDate}
-                onChange={e => setPaymentDialog(prev => ({ ...prev, paymentDate: e.target.value }))}
-                className="h-11 rounded-xl bg-slate-50 border-slate-100"
+              <IMaskInput
+                mask="00/00/00"
+                value={format(new Date(paymentDialog.paymentDate + 'T12:00:00'), 'dd/MM/yy')}
+                onAccept={(value) => {
+                  if (value.length === 8) {
+                    const [d, m, y] = value.split('/');
+                    const fullYear = parseInt(y) + 2000;
+                    const isoDate = `${fullYear}-${m}-${d}`;
+                    setPaymentDialog(prev => ({ ...prev, paymentDate: isoDate }));
+                  }
+                }}
+                className="flex h-11 w-full rounded-xl bg-slate-50 border border-slate-100 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
             <div className="space-y-1.5">
