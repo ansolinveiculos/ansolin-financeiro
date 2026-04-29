@@ -293,22 +293,26 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
                             </div>
                           </div>
 
-                          <div className="h-1.5 bg-slate-100 w-full rounded-full overflow-hidden flex">
-                            <motion.div 
-                              initial={{ width: 0 }}
-                              animate={{ width: `${(metrics.paidValue / metrics.totalGeral) * 100}%` }}
-                              className="h-full bg-lime-500" 
-                            />
-                            <motion.div 
-                              initial={{ width: 0 }}
-                              animate={{ width: `${(metrics.overdueValue / metrics.totalGeral) * 100}%` }}
-                              className="h-full bg-rose-500" 
-                            />
-                            <motion.div 
-                              initial={{ width: 0 }}
-                              animate={{ width: `${(metrics.pendingValue / metrics.totalGeral) * 100}%` }}
-                              className="h-full bg-slate-700" 
-                            />
+                          <div className="h-1.5 bg-slate-100 w-full rounded-full overflow-hidden flex gap-[1px]">
+                            {sale.installments?.sort((a,b) => a.number - b.number).map((inst, idx) => {
+                              const today = new Date();
+                              today.setHours(0,0,0,0);
+                              const dueDate = new Date(inst.dueDate);
+                              dueDate.setHours(0,0,0,0);
+                              
+                              let bgColor = "bg-slate-700";
+                              if (inst.status === 'paid') bgColor = "bg-lime-500";
+                              else if (dueDate < today) bgColor = "bg-rose-500";
+
+                              return (
+                                <motion.div 
+                                  key={inst.id}
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${(inst.value / metrics.totalGeral) * 100}%` }}
+                                  className={cn("h-full", bgColor, idx < (sale.installments?.length || 0) - 1 && "border-r border-white/30")} 
+                                />
+                              );
+                            })}
                           </div>
                         </div>
 
