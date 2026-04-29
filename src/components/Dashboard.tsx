@@ -37,53 +37,92 @@ interface DashboardProps {
   onSelectSale: (id: string) => void;
 }
 
-function GlobalFinanceChart({ recebido, overdue, pendingFuture }: { recebido: number, overdue: number, pendingFuture: number }) {
-  const total = recebido + overdue + pendingFuture || 1;
+function GlobalFinanceChart({ recebido, overdue, pendingFuture, paidCount, totalCount }: { recebido: number, overdue: number, pendingFuture: number, paidCount: number, totalCount: number }) {
+  const totalValue = recebido + overdue + pendingFuture || 1;
   const size = 120;
   const strokeWidth = 12;
   const radius = (size - strokeWidth) / 2;
-  const center = size / 2;
-  const circumference = 2 * Math.PI * radius;
+  
+  // Usaremos 20 segmentos para representar a saúde financeira global
+  const segments = 20;
+  const segmentAngle = 360 / segments;
+  
+  const pctRecebido = recebido / totalValue;
+  const pctOverdue = overdue / totalValue;
+  
+  const numRecebido = Math.round(pctRecebido * segments);
+  const numOverdue = Math.round(pctOverdue * segments);
+  
+  const getStrokeColor = (index: number) => {
+    if (index < numRecebido) return "#84cc16"; // verde (recebido)
+    if (index < numRecebido + numOverdue) return "#f43f5e"; // vermelho (vencido)
+    return "#e2e8f0"; // cinza (a receber)
+  };
 
-  const data = [
-    { value: recebido, color: '#84cc16' }, // emerald-500/lime-500
-    { value: overdue, color: '#f43f5e' }, // rose-500
-    { value: pendingFuture, color: '#e2e8f0' } // slate-200
-  ];
-
-  let currentOffset = 0;
+  const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
+    const angleInRadians = (angleInDegrees * Math.PI) / 180.0;
+    return {
+      x: centerX + radius * Math.cos(angleInRadians),
+      y: centerY + radius * Math.sin(angleInRadians)
+    };
+  };
 
   return (
-    <div className="flex items-center gap-6 bg-white p-4 rounded-2xl ring-1 ring-slate-100 shadow-sm">
+    <div className="flex items-center gap-6 bg-white p-5 rounded-3xl ring-1 ring-slate-100 shadow-sm">
       <div className="relative w-[120px] h-[120px] shrink-0">
-        <svg width={size} height={size} className="transform -rotate-90">
-          {data.map((item, i) => {
-            const percentage = item.value / total;
-            const strokeDasharray = `${percentage * circumference} ${circumference}`;
-            const strokeDashoffset = -currentOffset * circumference;
-            currentOffset += percentage;
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="transform -rotate-90">
+             {Array.from({ length: segments }).map((_, index) => {
+                const startAngle = index * segmentAngle;
+                const endAngle = (index + 1) * segmentAngle;
+                
+                const start = polarToCartesian(size/2, size/2, radius, startAngle);
+                const end = polarToCartesian(size/2, size/2, radius, endAngle);
+                const largeArcFlag = "0";
 
-            return (
-              <circle
-                key={i}
-                cx={center}
-                cy={center}
-                r={radius}
-                fill="transparent"
-                stroke={item.color}
-                strokeWidth={strokeWidth}
-                strokeDasharray={strokeDasharray}
-                strokeDashoffset={strokeDashoffset}
-                strokeLinecap="round"
-                className="transition-all duration-1000 ease-in-out"
-              />
-            );
-          })}
+                const d = [
+                  "M", start.x, start.y, 
+                  "A", radius, radius, 0, largeArcFlag, 1, end.x, end.y
+                ].join(" ");
+
+                return (
+                  <path
+                    key={`segment-${index}`}
+                    d={d}
+                    fill="none"
+                    stroke={getStrokeColor(index)}
+                    strokeWidth={strokeWidth}
+                    strokeLinecap="butt"
+                    className="transition-all duration-500"
+                  />
+                );
+             })}
+
+             {/* Divisores entre os segmentos */}
+             {segments > 1 && Array.from({ length: segments }).map((_, index) => {
+                const angle = index * segmentAngle;
+                const innerRadius = radius - strokeWidth / 2;
+                const outerRadius = radius + strokeWidth / 2;
+                
+                const p1 = polarToCartesian(size/2, size/2, innerRadius, angle);
+                const p2 = polarToCartesian(size/2, size/2, outerRadius, angle);
+                
+                return (
+                  <line
+                    key={`divider-${index}`}
+                    x1={p1.x}
+                    y1={p1.y}
+                    x2={p2.x}
+                    y2={p2.y}
+                    stroke="white"
+                    strokeWidth="1.5"
+                  />
+                );
+             })}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Total</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Geral</p>
           <p className="text-sm font-black text-slate-900 tracking-tighter">
-            {((recebido / total) * 100).toFixed(0)}%
+            {paidCount}/{totalCount}
           </p>
         </div>
       </div>
@@ -130,7 +169,9 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
       overdue: 0,
       pendingFuture: 0,
       totalVendido: 0,
-      count: 0
+      count: 0,
+      totalInstallments: 0,
+      paidInstallments: 0
     };
   });
   const [recentSales, setRecentSales] = useState<Proposal[]>(() => {
@@ -174,11 +215,13 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
 
             if (curr.installments) {
               curr.installments.forEach((inst: Installment) => {
+                acc.totalInstallments++;
                 const dueDate = new Date(inst.dueDate);
                 dueDate.setHours(0, 0, 0, 0);
 
                 if (inst.status === 'paid') {
                   acc.recebido += (inst.value || 0);
+                  acc.paidInstallments++;
                 } else {
                   if (dueDate < today) {
                     acc.overdue += (inst.value || 0);
@@ -190,7 +233,7 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
               });
             }
             return acc;
-          }, { recebido: 0, aReceber: 0, overdue: 0, pendingFuture: 0, totalVendido: 0, count: 0 });
+          }, { recebido: 0, aReceber: 0, overdue: 0, pendingFuture: 0, totalVendido: 0, count: 0, totalInstallments: 0, paidInstallments: 0 });
 
           // Sort data for recent sales descending
           const sortedData = [...data].sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime());
@@ -220,25 +263,6 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
 
     fetchStats();
   }, []);
-
-  const kpis = [
-    { 
-      label: 'A Receber', 
-      value: (stats.aReceber || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), 
-      icon: Clock, 
-      color: 'text-amber-500', 
-      bg: 'bg-amber-50',
-      desc: 'Total de parcelas em aberto'
-    },
-    { 
-      label: 'Volume de Vendas', 
-      value: stats.count, 
-      icon: Activity, 
-      color: 'text-purple-500', 
-      bg: 'bg-purple-50',
-      desc: 'Total de contratos ativos'
-    },
-  ];
 
   const getSaleMetrics = (sale: Proposal) => {
     const today = new Date();
@@ -307,32 +331,10 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
           recebido={stats.recebido || 0} 
           overdue={stats.overdue || 0} 
           pendingFuture={stats.pendingFuture || 0} 
+          paidCount={stats.paidInstallments || 0}
+          totalCount={stats.totalInstallments || 0}
         />
       </motion.div>
-
-      {/* KPI Grid */}
-      <div className="grid grid-cols-2 gap-4">
-        {kpis.map((kpi, idx) => (
-          <motion.div
-            key={kpi.label}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: idx * 0.1 }}
-          >
-            <Card className="border-none shadow-sm ring-1 ring-slate-100 overflow-hidden bg-white">
-              <CardContent className="p-4 flex flex-col gap-3">
-                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", kpi.bg)}>
-                  <kpi.icon className={cn("w-4 h-4", kpi.color)} />
-                </div>
-                <div>
-                  <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">{kpi.label}</h3>
-                  <p className="text-sm font-black text-slate-900 truncate">{kpi.value}</p>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
 
       {/* Recent Sales List (Mobile Style) */}
       <div className="space-y-3">
