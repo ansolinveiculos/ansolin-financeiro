@@ -172,7 +172,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
         installmentId,
         originalValue: inst.value,
         paidAmount: inst.value,
-        paymentDate: new Date().toISOString().split('T')[0]
+        paymentDate: inst.dueDate ? new Date(inst.dueDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
       });
       return;
     }
@@ -698,7 +698,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                                   {String(inst.number).padStart(2, '0')} <span>-</span>
                                   <div className="relative group/date">
                                     <span className="block hover:underline decoration-dotted cursor-pointer">
-                                      {safeFormat(inst.dueDate, 'dd/MM/yyyy')}
+                                      {safeFormat(inst.dueDate, 'dd/MM/yy')}
                                     </span>
                                     <input 
                                       type="date" 

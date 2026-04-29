@@ -517,7 +517,7 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
                     Finaliza em {financingDetails.installmentList.length > 0 && 
                       (() => {
                         const d = new Date(financingDetails.installmentList[financingDetails.installmentList.length-1].dueDate);
-                        return !isNaN(d.getTime()) ? format(d, 'MMM/yyyy', { locale: ptBR }) : 'Data Inválida';
+                        return !isNaN(d.getTime()) ? format(d, 'MMM/yy', { locale: ptBR }) : 'Data Inválida';
                       })()
                     }
                   </p>

@@ -326,7 +326,7 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
                         <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold border-t border-slate-50 pt-1.5">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
-                            {safeFormat(sale.createdAt, 'dd/MM/yyyy')}
+                            {safeFormat(sale.createdAt, 'dd/MM/yy')}
                           </span>
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-200">
                             {sale.installmentCount}X PARCELAS
@@ -341,31 +341,6 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
           )}
         </div>
       </div>
-
-      {/* Final Total (Big Card) */}
-      <Card className="bg-slate-900 text-white border-none shadow-xl rounded-2xl overflow-hidden p-6 relative">
-        <div className="absolute top-0 right-0 p-4 opacity-10">
-          <Wallet className="w-24 h-24 rotate-12" />
-        </div>
-        <div className="relative z-10 space-y-4">
-          <div>
-            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mb-1">Patrimônio Líquido</p>
-            <h2 className="text-3xl font-black text-white">
-              {((stats.recebido || 0) + (stats.aReceber || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-            </h2>
-          </div>
-          <div className="flex items-center gap-4 text-xs font-bold">
-            <span className="flex items-center gap-1.5 text-emerald-400">
-               <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
-               Liquidado
-            </span>
-            <span className="flex items-center gap-1.5 text-amber-400">
-               <div className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
-               Futuro
-            </span>
-          </div>
-        </div>
-      </Card>
     </div>
   );
 }
