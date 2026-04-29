@@ -52,9 +52,11 @@ import { toast } from 'sonner';
 
 interface ProposalListProps {
   onNewProposal: () => void;
+  onBack: () => void;
+  initialProposalId?: string | null;
 }
 
-export function ProposalList({ onNewProposal }: ProposalListProps) {
+export function ProposalList({ onNewProposal, onBack, initialProposalId }: ProposalListProps) {
   const [proposals, setProposals] = useState<Proposal[]>(() => {
     const cached = localStorage.getItem('ansolin_proposals');
     return cached ? JSON.parse(cached).map((p: any) => ({
@@ -145,6 +147,15 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
       if (unsubscribe) unsubscribe();
     }
   }, []);
+
+  useEffect(() => {
+    if (initialProposalId && proposals.length > 0) {
+      const found = proposals.find(p => p.id === initialProposalId);
+      if (found) {
+        setSelectedSale(found);
+      }
+    }
+  }, [initialProposalId, proposals]);
 
   const toggleInstallmentStatus = async (saleId: string, installmentId: string) => {
     const sale = proposals.find(p => p.id === saleId);
@@ -505,98 +516,46 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-black text-slate-900 tracking-tight">Histórico de Vendas</h1>
-        <p className="text-xs text-slate-500">Gestão de prazos e recebimentos.</p>
-      </div>
-
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-        <Input 
-          placeholder="Buscar cliente ou veículo..." 
-          className="pl-9 h-11 bg-white border-slate-200 focus:bg-white rounded-xl shadow-sm"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
-
-      <div className="space-y-4 pb-20">
-        {loading && proposals.length === 0 ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map(i => <div key={i} className="h-24 bg-slate-100 rounded-2xl animate-pulse" />)}
-          </div>
-        ) : filteredProposals.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl ring-1 ring-slate-100 text-slate-400">
-            <Search className="w-10 h-10 mb-2 opacity-10" />
-            <p className="text-xs font-bold uppercase tracking-wider">Nenhuma venda encontrada</p>
-          </div>
-        ) : (
-          <AnimatePresence mode="popLayout">
-            {filteredProposals.map((sale) => {
-              const { paidTotal, remaining } = getSaleMetrics(sale);
-              const progress = (paidTotal / (paidTotal + remaining)) * 100;
-
-              return (
-                <motion.div
-                  key={sale.id}
-                  layout
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  onClick={() => setSelectedSale(sale)}
-                >
-                  <Card className="border-none shadow-sm ring-1 ring-slate-100 overflow-hidden bg-white active:scale-[0.98] transition-all cursor-pointer group">
-                    <CardContent className="p-4 space-y-4">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[14px] font-black text-slate-900 truncate">{sale.customerName}</p>
-                          <p className="text-[14px] text-slate-500 font-bold uppercase tracking-tight truncate">{sale.carModel}</p>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-900 transition-colors" />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between text-[14px] font-black uppercase tracking-widest leading-none">
-                          <span className="text-emerald-500">Liquidado: {(paidTotal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                          <span className="text-slate-400">Restante: {(remaining || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                        </div>
-                        <div className="h-1.5 bg-slate-100 w-full rounded-full overflow-hidden">
-                          <motion.div 
-                            initial={{ width: 0 }}
-                            animate={{ width: `${progress}%` }}
-                            className="h-full bg-slate-900" 
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex justify-between items-center text-[14px] text-slate-400 font-bold">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {safeFormat(sale.createdAt, 'dd/MM/yyyy')}
-                        </span>
-                        <Badge variant="outline" className="text-[12px] px-1.5 py-0 border-slate-200">
-                          {sale.installmentCount}X PARCELAS
-                        </Badge>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        )}
-      </div>
+    <div className="min-h-screen">
+      {loading && !selectedSale && (
+        <div className="flex items-center justify-center p-20">
+          <RefreshCw className="w-8 h-8 animate-spin text-slate-200" />
+        </div>
+      )}
 
       {/* Sale Details Modal */}
-      <Dialog open={!!selectedSale} onOpenChange={() => {
-        setSelectedSale(null);
-        setIsConfirmingDelete(false);
+      <Dialog open={!!selectedSale} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedSale(null);
+          setIsConfirmingDelete(false);
+          onBack();
+        }
       }}>
         <DialogContent className="max-w-md w-[95%] rounded-3xl p-0 overflow-hidden border-none shadow-2xl max-h-[96vh] flex flex-col">
           {selectedSale && (
             <div className="flex-1 overflow-y-auto bg-[#F8FAFC] custom-scrollbar">
               <div className="bg-slate-900 p-5 text-white">
+                <div className="flex justify-between items-start mb-4">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-white/50 hover:text-white hover:bg-white/10 -ml-2"
+                    onClick={onBack}
+                  >
+                    <ChevronRight className="w-5 h-5 rotate-180" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-white/50 hover:text-white hover:bg-white/10"
+                    onClick={() => {
+                      setSelectedSale(null);
+                      onBack();
+                    }}
+                  >
+                    <XCircle className="w-5 h-5" />
+                  </Button>
+                </div>
                 <div className="flex justify-between items-end">
                   <div className="space-y-3 flex-1 pb-1">
                     <div>
@@ -711,13 +670,13 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                 
                 <div className="bg-white rounded-3xl ring-1 ring-slate-100 overflow-hidden mx-1">
                   <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-left border-collapse table-fixed min-w-[340px]">
+                    <table className="w-full text-left border-collapse table-fixed min-w-[310px]">
                       <thead>
                         <tr className="text-[14px] font-bold uppercase text-slate-400 border-b border-slate-50 bg-slate-50/50">
-                          <th className="py-2 pl-3 w-[130px]">Nº - Vcto</th>
-                          <th className="py-2 w-[110px]">Valor</th>
-                          <th className="py-2 pr-3 text-center w-[40px]">Status</th>
-                          <th className="py-2 pr-3 text-center w-[40px]">Ação</th>
+                          <th className="py-2 text-left pl-3 w-[155px]">Nº. - Vcto</th>
+                          <th className="py-2 text-right pr-4 w-[95px]">Valor</th>
+                          <th className="py-2 text-center w-[50px]">Status</th>
+                          <th className="py-2 w-[30px]"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -734,33 +693,35 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
 
                           return (
                             <tr key={inst.id} className={cn("text-[14px] font-normal transition-colors group", rowColor)}>
-                              <td className="py-2.5 pl-3 font-bold flex items-center gap-2">
-                                {String(inst.number).padStart(2, '0')} <span>-</span>
-                                <div className="relative group/date">
-                                  <span className="block hover:underline decoration-dotted cursor-pointer">
-                                    {safeFormat(inst.dueDate, 'dd/MM/yyyy')}
-                                  </span>
-                                  <input 
-                                    type="date" 
-                                    value={inst.dueDate ? new Date(inst.dueDate).toISOString().split('T')[0] : ''} 
-                                    className="absolute inset-0 opacity-0 cursor-pointer w-full"
-                                    onChange={(e) => updateInstallmentField(selectedSale.id, inst.id, 'dueDate', new Date(e.target.value + 'T12:00:00').toISOString())}
-                                  />
+                              <td className="py-2.5 pl-3 font-bold text-left overflow-hidden">
+                                <div className="flex items-center justify-start gap-2 whitespace-nowrap">
+                                  {String(inst.number).padStart(2, '0')} <span>-</span>
+                                  <div className="relative group/date">
+                                    <span className="block hover:underline decoration-dotted cursor-pointer">
+                                      {safeFormat(inst.dueDate, 'dd/MM/yyyy')}
+                                    </span>
+                                    <input 
+                                      type="date" 
+                                      value={inst.dueDate ? new Date(inst.dueDate).toISOString().split('T')[0] : ''} 
+                                      className="absolute inset-0 opacity-0 cursor-pointer w-full text-[16px]"
+                                      onChange={(e) => updateInstallmentField(selectedSale.id, inst.id, 'dueDate', new Date(e.target.value + 'T12:00:00').toISOString())}
+                                    />
+                                  </div>
                                 </div>
                               </td>
                               <td className="py-2.5">
-                                <div className="flex items-center gap-0.5">
-                                  <span className="opacity-40 font-medium scale-90">R$</span>
+                                <div className="flex items-center justify-end pr-4">
+                                  <span className="opacity-40 font-medium scale-90 mr-1">R$</span>
                                   <input 
                                     type="number" 
                                     step="0.01"
                                     value={inst.value} 
-                                    className="bg-transparent border-none p-0 focus:ring-0 w-full text-inherit font-medium"
+                                    className="bg-transparent border-none p-0 focus:ring-0 w-16 text-right text-[16px] text-inherit font-medium"
                                     onChange={(e) => updateInstallmentField(selectedSale.id, inst.id, 'value', Number(e.target.value))}
                                   />
                                 </div>
                               </td>
-                              <td className="py-2.5 pr-3 text-center">
+                              <td className="py-2.5 text-center">
                                 <button 
                                   onClick={() => toggleInstallmentStatus(selectedSale.id, inst.id)}
                                   className={cn(
@@ -771,7 +732,7 @@ export function ProposalList({ onNewProposal }: ProposalListProps) {
                                   {isPaid ? <CheckCircle2 className="w-4 h-4" /> : <RefreshCw className="w-3.5 h-3.5" />}
                                 </button>
                               </td>
-                              <td className="py-2.5 pr-3 text-center flex items-center justify-center gap-1">
+                              <td className="py-2.5 text-center flex items-center justify-center gap-1">
                                 {index !== selectedSale.installments.length - 1 && (
                                   <button 
                                      onClick={() => deleteInstallment(inst.id)}

@@ -22,7 +22,6 @@ interface LayoutProps {
 export function Layout({ children, currentView, onViewChange, user, onLogout }: LayoutProps) {
   const navItems = [
     { id: 'dashboard', label: 'Painel', icon: LayoutDashboard },
-    { id: 'proposals', label: 'Vendas', icon: FileText },
     { id: 'new-proposal', label: 'Nova', icon: PlusCircle },
   ] as const;
 

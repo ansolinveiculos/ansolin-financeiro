@@ -12,21 +12,32 @@ import {
   ArrowUpRight,
   TrendingDown,
   CalendarDays,
-  Activity
+  Activity,
+  ChevronRight,
+  Calendar
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+const safeFormat = (date: Date | string | number | null | undefined, fmt: string, options?: any) => {
+  if (!date) return 'Data Inválida';
+  const d = new Date(date);
+  if (!isValid(d)) return 'Data Inválida';
+  return format(d, fmt, options);
+};
 
 interface DashboardProps {
   onNewProposal: () => void;
+  onViewProposals: () => void;
+  onSelectSale: (id: string) => void;
 }
 
-export function Dashboard({ onNewProposal }: DashboardProps) {
+export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: DashboardProps) {
   const [stats, setStats] = useState(() => {
     const saved = localStorage.getItem('ansolin_stats');
     return saved ? JSON.parse(saved) : {
@@ -146,6 +157,46 @@ export function Dashboard({ onNewProposal }: DashboardProps) {
     },
   ];
 
+  const getSaleMetrics = (sale: Proposal) => {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    const downPayment = sale.downPayment || 0;
+    const installments = sale.installments || [];
+    
+    const paidInstallments = installments.filter(i => i.status === 'paid');
+    const paidCount = paidInstallments.length;
+    const paidValue = paidInstallments.reduce((acc, i) => acc + (i.value || 0), 0);
+
+    const overdueInstallments = installments.filter(i => {
+      const date = new Date(i.dueDate);
+      date.setHours(0,0,0,0);
+      return i.status !== 'paid' && date < today;
+    });
+    const overdueCount = overdueInstallments.length;
+    const overdueValue = overdueInstallments.reduce((acc, i) => acc + (i.value || 0), 0);
+    
+    const pendingInstallments = installments.filter(i => {
+      const date = new Date(i.dueDate);
+      date.setHours(0,0,0,0);
+      return i.status !== 'paid' && date >= today;
+    });
+    const pendingCount = pendingInstallments.length;
+    const pendingValue = pendingInstallments.reduce((acc, i) => acc + (i.value || 0), 0);
+    
+    const totalGeral = paidValue + overdueValue + pendingValue;
+
+    return { 
+      paidCount,
+      paidValue,
+      overdueCount,
+      overdueValue,
+      pendingCount,
+      pendingValue,
+      totalGeral: totalGeral || 1
+    };
+  };
+
   if (loading && stats.count === 0 && recentSales.length === 0) {
     return <div className="space-y-6 animate-pulse">
       <div className="grid grid-cols-2 gap-4">
@@ -191,33 +242,91 @@ export function Dashboard({ onNewProposal }: DashboardProps) {
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
           <h2 className="text-xs font-black uppercase tracking-wider text-slate-400">Últimos Lançamentos</h2>
-          <Button variant="ghost" size="sm" className="h-6 text-[10px] font-bold text-blue-500 p-0">Ver tudo</Button>
         </div>
         
-        <div className="space-y-3">
+        <div className="space-y-4">
           {recentSales.length === 0 ? (
             <div className="p-8 text-center text-slate-400 italic text-xs bg-white rounded-2xl ring-1 ring-slate-100 shadow-sm">
               Nenhuma venda registrada ainda.
             </div>
           ) : (
-            recentSales.map((sale) => (
-              <Card key={sale.id} className="border-none shadow-sm ring-1 ring-slate-100 overflow-hidden bg-white active:scale-[0.98] transition-all">
-                <CardContent className="p-4 flex items-center justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-black text-slate-900 truncate">{sale.customerName}</p>
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">{sale.carModel}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-black text-slate-900">
-                      {(sale.carPrice || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
-                    </p>
-                    <Badge variant="secondary" className="px-1.5 py-0 text-[8px] font-black uppercase bg-emerald-50 text-emerald-600 border-none">
-                      {sale.installmentCount}x
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
+            <AnimatePresence mode="popLayout">
+              {recentSales.map((sale) => {
+                const metrics = getSaleMetrics(sale);
+
+                return (
+                  <motion.div
+                    key={sale.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    onClick={() => onSelectSale(sale.id)}
+                  >
+                    <Card className="border-none shadow-sm ring-1 ring-slate-100 overflow-hidden bg-white active:scale-[0.98] transition-all cursor-pointer group">
+                      <CardContent className="p-3.5 space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[14px] font-black text-slate-900 truncate leading-tight">{sale.customerName}</p>
+                            <p className="text-[12px] text-slate-500 font-bold uppercase tracking-tight truncate">{sale.carModel}</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-slate-300 mt-0.5 group-hover:text-slate-900 transition-colors" />
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="space-y-0 text-left">
+                              <p className="text-[9px] font-black uppercase tracking-wider text-emerald-500">Pagas</p>
+                              <p className="text-[11px] font-black text-slate-900 leading-none">
+                                {metrics.paidCount} = {metrics.paidValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </p>
+                            </div>
+                            <div className="space-y-0 text-center">
+                              <p className="text-[9px] font-black uppercase tracking-wider text-rose-500">Em Atraso</p>
+                              <p className="text-[11px] font-black text-slate-900 leading-none">
+                                {metrics.overdueCount} = {metrics.overdueValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </p>
+                            </div>
+                            <div className="space-y-0 text-right">
+                              <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">A Vencer</p>
+                              <p className="text-[11px] font-black text-slate-900 leading-none">
+                                {metrics.pendingCount} = {metrics.pendingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="h-1.5 bg-slate-100 w-full rounded-full overflow-hidden flex">
+                            <motion.div 
+                              initial={{ width: 0 }}
+                              animate={{ width: `${(metrics.paidValue / metrics.totalGeral) * 100}%` }}
+                              className="h-full bg-lime-500" 
+                            />
+                            <motion.div 
+                              initial={{ width: 0 }}
+                              animate={{ width: `${(metrics.overdueValue / metrics.totalGeral) * 100}%` }}
+                              className="h-full bg-rose-500" 
+                            />
+                            <motion.div 
+                              initial={{ width: 0 }}
+                              animate={{ width: `${(metrics.pendingValue / metrics.totalGeral) * 100}%` }}
+                              className="h-full bg-slate-700" 
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between items-center text-[11px] text-slate-400 font-bold">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {safeFormat(sale.createdAt, 'dd/MM/yyyy')}
+                          </span>
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-200">
+                            {sale.installmentCount}X PARCELAS
+                          </Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           )}
         </div>
       </div>

@@ -22,6 +22,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState<View>('dashboard');
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -106,8 +107,26 @@ export default function App() {
             exit={{ opacity: 0, x: -10 }}
             transition={{ duration: 0.2 }}
           >
-            {currentView === 'dashboard' && <Dashboard onNewProposal={() => setCurrentView('new-proposal')} />}
-            {currentView === 'proposals' && <ProposalList onNewProposal={() => setCurrentView('new-proposal')} />}
+            {currentView === 'dashboard' && (
+              <Dashboard 
+                onNewProposal={() => setCurrentView('new-proposal')} 
+                onViewProposals={() => {
+                  setSelectedProposalId(null);
+                  setCurrentView('proposals');
+                }}
+                onSelectSale={(id) => {
+                  setSelectedProposalId(id);
+                  setCurrentView('proposals');
+                }}
+              />
+            )}
+            {currentView === 'proposals' && (
+              <ProposalList 
+                onNewProposal={() => setCurrentView('new-proposal')} 
+                onBack={() => setCurrentView('dashboard')}
+                initialProposalId={selectedProposalId}
+              />
+            )}
             {currentView === 'new-proposal' && <ProposalForm onSuccess={() => setCurrentView('proposals')} onCancel={() => setCurrentView('dashboard')} />}
           </motion.div>
         </AnimatePresence>

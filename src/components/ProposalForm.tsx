@@ -360,7 +360,7 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
                   <Input 
                     id="carPlate"
                     required
-                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-sm rounded-xl uppercase"
+                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl uppercase"
                     placeholder="ABC-1234"
                     value={formData.carPlate}
                     onChange={e => updateField('carPlate', e.target.value.toUpperCase())}
@@ -371,7 +371,7 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
                   <Input 
                     id="carModel"
                     required
-                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-sm rounded-xl"
+                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl"
                     placeholder="Ex: CG 160"
                     value={formData.carModel}
                     onChange={e => updateField('carModel', e.target.value)}
@@ -385,7 +385,7 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
                     id="carYear"
                     type="number"
                     required
-                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-sm rounded-xl"
+                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl"
                     placeholder="Ex: 2020"
                     value={formData.carYear || ''}
                     onChange={e => updateField('carYear', parseInt(e.target.value))}
@@ -396,7 +396,7 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
                   <Input 
                     id="carColor"
                     required
-                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-sm rounded-xl"
+                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl"
                     placeholder="Ex: Preta"
                     value={formData.carColor}
                     onChange={e => updateField('carColor', e.target.value)}
@@ -411,7 +411,7 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
                     id="carPrice"
                     type="number"
                     required
-                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white font-bold text-sm rounded-xl"
+                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white font-bold text-base rounded-xl"
                     placeholder="R$ 0,00"
                     value={formData.carPrice || ''}
                     onChange={e => updateField('carPrice', parseFloat(e.target.value))}
@@ -422,7 +422,7 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
                   <Input 
                     id="downPayment"
                     type="number"
-                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-sm rounded-xl"
+                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl"
                     placeholder="R$ 0,00"
                     value={formData.downPayment || ''}
                     onChange={e => updateField('downPayment', parseFloat(e.target.value))}
@@ -464,7 +464,7 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
                   <Label className="text-[10px] uppercase font-bold text-slate-400">1º Vencimento</Label>
                   <Input 
                     type="date"
-                    className="h-11 bg-slate-50/50 border-slate-200 rounded-xl text-sm"
+                    className="h-11 bg-slate-50/50 border-slate-200 rounded-xl text-base"
                     value={formData.firstDueDate}
                     onChange={e => updateField('firstDueDate', e.target.value)}
                   />
