@@ -37,12 +37,98 @@ interface DashboardProps {
   onSelectSale: (id: string) => void;
 }
 
+function GlobalFinanceChart({ recebido, overdue, pendingFuture }: { recebido: number, overdue: number, pendingFuture: number }) {
+  const total = recebido + overdue + pendingFuture || 1;
+  const size = 120;
+  const strokeWidth = 12;
+  const radius = (size - strokeWidth) / 2;
+  const center = size / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  const data = [
+    { value: recebido, color: '#84cc16' }, // emerald-500/lime-500
+    { value: overdue, color: '#f43f5e' }, // rose-500
+    { value: pendingFuture, color: '#e2e8f0' } // slate-200
+  ];
+
+  let currentOffset = 0;
+
+  return (
+    <div className="flex items-center gap-6 bg-white p-4 rounded-2xl ring-1 ring-slate-100 shadow-sm">
+      <div className="relative w-[120px] h-[120px] shrink-0">
+        <svg width={size} height={size} className="transform -rotate-90">
+          {data.map((item, i) => {
+            const percentage = item.value / total;
+            const strokeDasharray = `${percentage * circumference} ${circumference}`;
+            const strokeDashoffset = -currentOffset * circumference;
+            currentOffset += percentage;
+
+            return (
+              <circle
+                key={i}
+                cx={center}
+                cy={center}
+                r={radius}
+                fill="transparent"
+                stroke={item.color}
+                strokeWidth={strokeWidth}
+                strokeDasharray={strokeDasharray}
+                strokeDashoffset={strokeDashoffset}
+                strokeLinecap="round"
+                className="transition-all duration-1000 ease-in-out"
+              />
+            );
+          })}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Total</p>
+          <p className="text-sm font-black text-slate-900 tracking-tighter">
+            {((recebido / total) * 100).toFixed(0)}%
+          </p>
+        </div>
+      </div>
+      
+      <div className="flex-1 space-y-2.5">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-lime-500" />
+          <div className="min-w-0">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider leading-none mb-1">Recebido</p>
+            <p className="text-[11px] font-bold text-slate-900 truncate">
+              {recebido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-rose-500" />
+          <div className="min-w-0">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider leading-none mb-1">Vencido</p>
+            <p className="text-[11px] font-bold text-rose-600 truncate">
+              {overdue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-slate-200" />
+          <div className="min-w-0">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider leading-none mb-1">A Receber</p>
+            <p className="text-[11px] font-bold text-slate-600 truncate">
+              {pendingFuture.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: DashboardProps) {
   const [stats, setStats] = useState(() => {
     const saved = localStorage.getItem('ansolin_stats');
     return saved ? JSON.parse(saved) : {
       recebido: 0,
       aReceber: 0,
+      overdue: 0,
+      pendingFuture: 0,
       totalVendido: 0,
       count: 0
     };
@@ -83,14 +169,28 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
             acc.totalVendido += (curr.carPrice || 0);
             acc.count++;
             
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
             if (curr.installments) {
               curr.installments.forEach((inst: Installment) => {
-                if (inst.status === 'paid') acc.recebido += (inst.value || 0);
-                else acc.aReceber += (inst.value || 0);
+                const dueDate = new Date(inst.dueDate);
+                dueDate.setHours(0, 0, 0, 0);
+
+                if (inst.status === 'paid') {
+                  acc.recebido += (inst.value || 0);
+                } else {
+                  if (dueDate < today) {
+                    acc.overdue += (inst.value || 0);
+                  } else {
+                    acc.pendingFuture += (inst.value || 0);
+                  }
+                  acc.aReceber += (inst.value || 0);
+                }
               });
             }
             return acc;
-          }, { recebido: 0, aReceber: 0, totalVendido: 0, count: 0 });
+          }, { recebido: 0, aReceber: 0, overdue: 0, pendingFuture: 0, totalVendido: 0, count: 0 });
 
           // Sort data for recent sales descending
           const sortedData = [...data].sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime());
@@ -196,6 +296,19 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
         <h1 className="text-xl font-black text-slate-900 tracking-tight">Painel Financeiro</h1>
         <p className="text-xs text-slate-500 font-medium">{format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
       </div>
+
+      {/* Global Financial Chart */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <GlobalFinanceChart 
+          recebido={stats.recebido || 0} 
+          overdue={stats.overdue || 0} 
+          pendingFuture={stats.pendingFuture || 0} 
+        />
+      </motion.div>
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 gap-4">
