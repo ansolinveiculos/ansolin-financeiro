@@ -299,7 +299,7 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
                               const dueDate = new Date(inst.dueDate);
                               dueDate.setHours(0,0,0,0);
                               
-                              let bgColor = "bg-sky-400";
+                              let bgColor = "bg-slate-200";
                               if (inst.status === 'paid') bgColor = "bg-lime-500";
                               else if (dueDate < today) bgColor = "bg-rose-500";
 

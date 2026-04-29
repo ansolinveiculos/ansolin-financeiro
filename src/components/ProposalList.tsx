@@ -449,7 +449,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
             today.setHours(0,0,0,0);
             const isOverdue = !isPaid && dueDate < today;
 
-            let strokeColor = "#7dd3fc"; 
+            let strokeColor = "#e2e8f0"; 
             if (isPaid) strokeColor = "#84cc16"; 
             else if (isOverdue) strokeColor = "#f43f5e"; 
 
