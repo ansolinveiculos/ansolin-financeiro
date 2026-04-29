@@ -127,7 +127,7 @@ export default function App() {
                 initialProposalId={selectedProposalId}
               />
             )}
-            {currentView === 'new-proposal' && <ProposalForm onSuccess={() => setCurrentView('proposals')} onCancel={() => setCurrentView('dashboard')} />}
+            {currentView === 'new-proposal' && <ProposalForm onSuccess={() => setCurrentView('dashboard')} onCancel={() => setCurrentView('dashboard')} />}
           </motion.div>
         </AnimatePresence>
       </Layout>

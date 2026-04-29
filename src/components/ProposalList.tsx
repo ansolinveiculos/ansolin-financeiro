@@ -36,7 +36,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { format, isValid } from 'date-fns';
+import { format, isValid, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { IMaskInput } from 'react-imask';
 import { motion, AnimatePresence } from 'motion/react';
@@ -297,7 +297,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
     const sale = proposals.find(p => p.id === saleId);
     if (!sale || !sale.installments) return;
 
-    const updatedInstallments = sale.installments.map(inst => {
+    let updatedInstallments = sale.installments.map(inst => {
       if (inst.id === installmentId) {
         const updated = { ...inst, [field]: value };
         // If paidAt is set, ensure status is paid
@@ -308,6 +308,26 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
       }
       return inst;
     });
+
+    // Cascading due date adjustment
+    if (field === 'dueDate') {
+      const changedIndex = updatedInstallments.findIndex(inst => inst.id === installmentId);
+      if (changedIndex !== -1) {
+        const baseDate = new Date(value);
+        if (!isNaN(baseDate.getTime())) {
+          for (let i = changedIndex + 1; i < updatedInstallments.length; i++) {
+            // Only update upcoming installments that are not already paid
+            if (updatedInstallments[i].status !== 'paid') {
+              const nextDate = addMonths(baseDate, i - changedIndex);
+              updatedInstallments[i] = { 
+                ...updatedInstallments[i], 
+                dueDate: nextDate.toISOString() 
+              };
+            }
+          }
+        }
+      }
+    }
 
     // Update locally
     const updatedProposal = { ...sale, installments: updatedInstallments };
@@ -429,7 +449,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
             today.setHours(0,0,0,0);
             const isOverdue = !isPaid && dueDate < today;
 
-            let strokeColor = "#334155"; 
+            let strokeColor = "#7dd3fc"; 
             if (isPaid) strokeColor = "#84cc16"; 
             else if (isOverdue) strokeColor = "#f43f5e"; 
 
@@ -561,7 +581,33 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                   <div className="space-y-3 flex-1 pb-1">
                     <div>
                       <p className="text-[14px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Cliente</p>
-                      <h2 className="text-xl font-black truncate">{selectedSale.customerName}</h2>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-xl font-black truncate">{selectedSale.customerName}</h2>
+                        <div className="flex items-center gap-2 flex-1 justify-between min-w-0">
+                          {selectedSale.customerPhone && (
+                            <span className="text-xs font-bold text-slate-500 truncate">{selectedSale.customerPhone}</span>
+                          )}
+                          {(() => {
+                            const insts = selectedSale.installments || [];
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const overdue = insts.filter(i => {
+                              const date = new Date(i.dueDate);
+                              date.setHours(0, 0, 0, 0);
+                              return i.status !== 'paid' && date < today;
+                            });
+                            const pending = insts.filter(i => {
+                              const date = new Date(i.dueDate);
+                              date.setHours(0, 0, 0, 0);
+                              return i.status !== 'paid' && date >= today;
+                            });
+                            if (overdue.length === 0 && pending.length === 0 && insts.length > 0) {
+                              return <Badge className="bg-emerald-500 text-white border-none text-[12px] h-auto px-1.5 py-0 font-normal uppercase tracking-tighter">Quitado</Badge>;
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      </div>
                       <p className="text-[14px] font-bold uppercase text-slate-500 tracking-wider">
                         {selectedSale.carModel}, {selectedSale.carYear}, {selectedSale.carColor || 'SEM COR'}
                       </p>
@@ -641,18 +687,22 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                                   {paid.length} = {sum(paid)}
                                 </p>
                               </div>
-                              <div>
-                                <p className="text-[14px] text-white font-normal uppercase tracking-widest leading-tight">Em Atraso</p>
-                                <p className="text-[14px] font-normal text-rose-400 leading-none pt-1">
-                                  {overdue.length} = {sum(overdue)}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-[14px] text-white font-normal uppercase tracking-widest leading-tight">A Vencer</p>
-                                <p className="text-[14px] font-normal text-slate-300 leading-none pt-1">
-                                  {pending.length} = {sum(pending)}
-                                </p>
-                              </div>
+                              {overdue.length > 0 && (
+                                <div>
+                                  <p className="text-[14px] text-white font-normal uppercase tracking-widest leading-tight">Em Atraso</p>
+                                  <p className="text-[14px] font-normal text-rose-400 leading-none pt-1">
+                                    {overdue.length} = {sum(overdue)}
+                                  </p>
+                                </div>
+                              )}
+                              {pending.length > 0 && (
+                                <div>
+                                  <p className="text-[14px] text-white font-normal uppercase tracking-widest leading-tight">A Vencer</p>
+                                  <p className="text-[14px] font-normal text-slate-300 leading-none pt-1">
+                                    {pending.length} = {sum(pending)}
+                                  </p>
+                                </div>
+                              )}
                             </>
                           );
                         })()}
@@ -788,10 +838,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                     </Button>
                   </div>
                 ) : (
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 h-11 rounded-2xl border-slate-200 text-slate-900 text-[14px] font-bold" onClick={() => setSelectedSale(null)}>
-                      Fechar Detalhes
-                    </Button>
+                  <div className="flex justify-end pr-1">
                     <Button 
                       variant="outline" 
                       className="w-11 h-11 rounded-2xl border-rose-200 text-rose-500 bg-rose-50/50 hover:bg-rose-100 p-0" 

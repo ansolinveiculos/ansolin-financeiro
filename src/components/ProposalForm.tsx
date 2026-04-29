@@ -86,6 +86,7 @@ interface ProposalFormProps {
 
 export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
   const [loading, setLoading] = useState(false);
+  const [isEditingInstallment, setIsEditingInstallment] = useState(false);
   const [formData, setFormData] = useState({
     customerName: '',
     customerCpf: '',
@@ -98,6 +99,7 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
     downPayment: 0,
     installmentCount: 12,
     interestRate: 0, // Zero interest by default for "vendas a prazo" direct
+    manualInstallment: 0,
     firstDueDate: format(addMonths(new Date(), 1), 'yyyy-MM-dd'),
     notes: ''
   });
@@ -106,9 +108,13 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
     const principal = formData.carPrice - formData.downPayment;
     if (principal <= 0) return { principal: 0, installment: 0, total: 0, installmentList: [] };
 
-    // Simple interest or no interest as requested (simple division for direct sales)
+    // Calculate suggested based on interest rate
     const totalWithInterest = principal * (1 + (formData.interestRate / 100));
-    const installmentValue = totalWithInterest / formData.installmentCount;
+    const suggestedInstallment = totalWithInterest / formData.installmentCount;
+    
+    // Determine actual installment value: manual choice or suggested
+    const actualInstallment = formData.manualInstallment > 0 ? formData.manualInstallment : suggestedInstallment;
+    const actualTotal = actualInstallment * formData.installmentCount;
     
     // Generate installment list
     const installmentList: Installment[] = [];
@@ -121,18 +127,18 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
         id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9),
         number: i,
         dueDate: addMonths(firstDate, i - 1).toISOString(),
-        value: installmentValue,
+        value: actualInstallment,
         status: 'pending'
       });
     }
 
     return {
       principal,
-      installment: installmentValue,
-      total: totalWithInterest,
+      installment: actualInstallment,
+      total: actualTotal,
       installmentList
     };
-  }, [formData.carPrice, formData.downPayment, formData.installmentCount, formData.interestRate, formData.firstDueDate]);
+  }, [formData.carPrice, formData.downPayment, formData.installmentCount, formData.interestRate, formData.manualInstallment, formData.firstDueDate]);
 
   const handleSubmit = async (e: React.FormEvent, status: ProposalStatus) => {
     e.preventDefault();
@@ -282,7 +288,13 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
     } else if (field === 'carPlate') {
       value = (value as string).toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^([A-Z]{3})([A-Z0-9])/, '$1-$2').slice(0, 8);
     }
-    setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // Reset manual override if basic finance fields change to show new suggestion
+    if (['carPrice', 'downPayment', 'installmentCount', 'interestRate'].includes(field)) {
+      setFormData(prev => ({ ...prev, [field]: value, manualInstallment: 0 }));
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
   };
 
   return (
@@ -501,14 +513,38 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
           <Card className="bg-slate-900 text-white border-none shadow-xl rounded-2xl overflow-hidden">
             <CardContent className="p-5 space-y-4">
               <div className="flex justify-between items-end">
-                <div>
-                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Parcela Mensal</p>
-                  <p className="text-2xl font-black text-white">
-                    {financingDetails.installment.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </p>
+                <div className="group relative">
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Parcela Mensal</p>
+                  {isEditingInstallment ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-xl font-black text-white">R$</span>
+                      <Input 
+                        autoFocus
+                        type="number"
+                        step="0.01"
+                        className="h-8 w-28 bg-white/10 border-white/20 text-white font-black text-xl p-1 focus:bg-white/20"
+                        value={formData.manualInstallment || financingDetails.installment.toFixed(2)}
+                        onChange={e => updateField('manualInstallment', parseFloat(e.target.value))}
+                        onBlur={() => setIsEditingInstallment(false)}
+                        onKeyDown={e => e.key === 'Enter' && setIsEditingInstallment(false)}
+                      />
+                    </div>
+                  ) : (
+                    <div 
+                      className="cursor-pointer group flex flex-col" 
+                      onClick={() => setIsEditingInstallment(true)}
+                    >
+                      <p className="text-2xl font-black text-white group-hover:text-amber-400 transition-colors">
+                        {financingDetails.installment.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </p>
+                      <span className="text-[8px] text-slate-500 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">
+                        Clique para ajustar
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Total</p>
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Saldo Total</p>
                   <p className="text-sm font-bold text-amber-400">
                     {financingDetails.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </p>

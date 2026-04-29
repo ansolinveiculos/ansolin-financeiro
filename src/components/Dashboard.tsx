@@ -250,9 +250,14 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
                           <div className="flex-1 min-w-0">
                             <div className="flex items-baseline gap-2 overflow-hidden">
                               <p className="text-[14px] font-black text-slate-900 truncate flex-shrink-0 max-w-[55%]">{sale.customerName}</p>
-                              {sale.customerPhone && (
-                                <p className="text-[14px] font-normal text-slate-400 truncate tracking-tight">{sale.customerPhone}</p>
-                              )}
+                                {sale.customerPhone && (
+                                  <div className="flex items-center gap-1.5 truncate min-w-0">
+                                    <p className="text-[14px] font-normal text-slate-400 truncate tracking-tight">{sale.customerPhone}</p>
+                                    {metrics.overdueCount === 0 && metrics.pendingCount === 0 && sale.installments && sale.installments.length > 0 && (
+                                      <Badge className="bg-emerald-500 text-white border-none text-[14px] h-auto px-2 py-0 font-normal uppercase tracking-tighter ml-auto">Quitado</Badge>
+                                    )}
+                                  </div>
+                                )}
                             </div>
                             <p className="text-[12px] text-slate-500 font-normal uppercase tracking-tight truncate leading-tight mt-0.5">
                               {sale.carModel}{sale.carYear ? ` / ${sale.carYear}` : ''}{sale.carColor ? ` / ${sale.carColor}` : ''}
@@ -262,25 +267,29 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
                         </div>
 
                         <div className="space-y-1.5">
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className={`grid ${metrics.overdueCount > 0 && metrics.pendingCount > 0 ? 'grid-cols-3' : (metrics.overdueCount > 0 || metrics.pendingCount > 0 ? 'grid-cols-2' : 'grid-cols-1')} gap-2`}>
                             <div className="space-y-0 text-left">
                               <p className="text-[9px] font-black uppercase tracking-wider text-emerald-500">Pagas</p>
                               <p className="text-[11px] font-black text-slate-900 leading-none">
                                 {metrics.paidCount} = {metrics.paidValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </p>
                             </div>
-                            <div className="space-y-0 text-center">
-                              <p className="text-[9px] font-black uppercase tracking-wider text-rose-500">Em Atraso</p>
-                              <p className="text-[11px] font-black text-slate-900 leading-none">
-                                {metrics.overdueCount} = {metrics.overdueValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                              </p>
-                            </div>
-                            <div className="space-y-0 text-right">
-                              <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">A Vencer</p>
-                              <p className="text-[11px] font-black text-slate-900 leading-none">
-                                {metrics.pendingCount} = {metrics.pendingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                              </p>
-                            </div>
+                            {metrics.overdueCount > 0 && (
+                              <div className={`space-y-0 ${metrics.pendingCount > 0 ? 'text-center' : 'text-right'}`}>
+                                <p className="text-[9px] font-black uppercase tracking-wider text-rose-500">Em Atraso</p>
+                                <p className="text-[11px] font-black text-slate-900 leading-none">
+                                  {metrics.overdueCount} = {metrics.overdueValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                            )}
+                            {metrics.pendingCount > 0 && (
+                              <div className="space-y-0 text-right">
+                                <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">A Vencer</p>
+                                <p className="text-[11px] font-black text-slate-900 leading-none">
+                                  {metrics.pendingCount} = {metrics.pendingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                            )}
                           </div>
 
                           <div className="h-1.5 bg-slate-100 w-full rounded-full overflow-hidden flex gap-[1px]">
@@ -290,7 +299,7 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
                               const dueDate = new Date(inst.dueDate);
                               dueDate.setHours(0,0,0,0);
                               
-                              let bgColor = "bg-slate-700";
+                              let bgColor = "bg-sky-400";
                               if (inst.status === 'paid') bgColor = "bg-lime-500";
                               else if (dueDate < today) bgColor = "bg-rose-500";
 
