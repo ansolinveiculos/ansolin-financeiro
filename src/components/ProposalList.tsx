@@ -537,11 +537,24 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
     );
   };
 
-  const filteredProposals = proposals.filter(p => {
-    const matchesSearch = (p.customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         (p.carModel || '').toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
-  });
+  const filteredProposals = searchTerm.length >= 3 
+    ? proposals.filter(p => {
+        const search = searchTerm.toLowerCase();
+        return (p.customerName || '').toLowerCase().includes(search) || 
+               (p.carModel || '').toLowerCase().includes(search) ||
+               (p.carPlate || '').toLowerCase().includes(search) ||
+               (p.customerPhone || '').toLowerCase().includes(search);
+      })
+    : proposals;
+
+  const getSaleReferenceDate = (sale: Proposal) => {
+    if (!sale.installments || sale.installments.length === 0) return null;
+    const sorted = [...sale.installments].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    const firstDue = new Date(sorted[0].dueDate);
+    const refDate = new Date(firstDue);
+    refDate.setDate(refDate.getDate() - 30);
+    return format(refDate, "MMMM/yyyy", { locale: ptBR });
+  };
 
   const getSaleMetrics = (sale: Proposal) => {
     const paidInstallmentsValue = sale.installments?.filter(i => i.status === 'paid').reduce((acc, i) => acc + (i.value || 0), 0) || 0;
@@ -552,14 +565,125 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
   };
 
   return (
-    <div className="min-h-screen">
-      {loading && !selectedSale && (
-        <div className="flex items-center justify-center p-20">
-          <RefreshCw className="w-8 h-8 animate-spin text-slate-200" />
-        </div>
-      )}
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <div className="bg-white border-b border-slate-100 px-4 py-4 sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-9 w-9 rounded-xl text-slate-400 hover:text-slate-900"
+                onClick={onBack}
+              >
+                <ChevronRight className="w-5 h-5 rotate-180" />
+              </Button>
+              <h1 className="text-lg font-black tracking-tight text-slate-900 uppercase">Todas as Propostas</h1>
+            </div>
+            <Button 
+              onClick={onNewProposal}
+              className="h-9 rounded-xl bg-slate-900 text-white font-bold text-xs uppercase px-4"
+            >
+              Nova Proposta
+            </Button>
+          </div>
 
-      {/* Sale Details Modal */}
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+              <Search className="w-4 h-4 text-slate-400 group-focus-within:text-slate-900 transition-colors" />
+            </div>
+            <Input 
+              type="text"
+              placeholder="Buscar por cliente, carro, placa..."
+              className="w-full bg-slate-100 border-none rounded-xl pl-10 pr-10 h-11 text-sm font-medium focus:ring-2 focus:ring-slate-900/5 transition-all"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm('')}
+                className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600"
+              >
+                <XCircle className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+        <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4 pb-20">
+          <AnimatePresence mode="popLayout">
+            {filteredProposals.map((sale) => (
+              <motion.div
+                layout
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                key={sale.id}
+                onClick={() => setSelectedSale(sale)}
+                className="group relative bg-white rounded-3xl p-5 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 transition-all cursor-pointer ring-1 ring-slate-100 hover:ring-slate-200 flex flex-col justify-between"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div className="space-y-1 truncate flex-1">
+                    <h3 className="text-[14px] font-black text-slate-900 uppercase tracking-tight leading-tight truncate">
+                      {sale.customerName}
+                    </h3>
+                    <p className="text-[12px] text-slate-500 font-normal uppercase tracking-tight truncate leading-tight mt-0.5">
+                      <span className="font-bold">{sale.carModel}</span>{sale.carYear ? ` / ${sale.carYear}` : ''}{sale.carColor ? ` / ${sale.carColor}` : ''}{sale.carPlate ? ` / ${sale.carPlate.toUpperCase()}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 ml-2">
+                    {(() => {
+                      const overdueCount = sale.installments?.filter(i => {
+                        const d = new Date(i.dueDate);
+                        d.setHours(0,0,0,0);
+                        const today = new Date();
+                        today.setHours(0,0,0,0);
+                        return i.status !== 'paid' && d < today;
+                      }).length || 0;
+                      
+                      const isFullyPaid = sale.installments?.every(i => i.status === 'paid') && sale.installments?.length > 0;
+
+                      if (isFullyPaid) return <Badge className="bg-emerald-500 text-white border-none text-[9px] h-4 px-1.5 font-bold uppercase tracking-widest">Quitado</Badge>;
+                      if (overdueCount > 0) return <Badge className="bg-rose-500 text-white border-none text-[9px] h-4 px-1.5 font-bold uppercase tracking-widest">{overdueCount} A atraso</Badge>;
+                      return <Badge className="bg-slate-100 text-slate-500 border-none text-[9px] h-4 px-1.5 font-bold uppercase tracking-widest">Em Dia</Badge>;
+                    })()}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <PaymentProgressChart installments={sale.installments || []} />
+                  <div className="flex items-end justify-between gap-2">
+                    <div className="flex flex-col">
+                      <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-0.5">Saldo Devedor</span>
+                      <span className="text-[14px] font-black text-slate-900 leading-none">
+                        {(sale.installments?.filter(i => i.status !== 'paid').reduce((acc, i) => acc + (i.value || 0), 0) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </span>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-0.5">Referência</span>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">{getSaleReferenceDate(sale)}</span>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+
+          {filteredProposals.length === 0 && (
+            <div className="col-span-full py-20 text-center space-y-3">
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto">
+                <Search className="w-8 h-8 text-slate-300" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-slate-900 font-black text-lg">Nenhum resultado</p>
+                <p className="text-slate-500 text-sm">Não encontramos nenhuma proposta para sua busca.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
       <Dialog open={!!selectedSale} onOpenChange={(open) => {
         if (!open) {
           setSelectedSale(null);
@@ -647,11 +771,11 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                           </div>
                         )}
                       </div>
-                      <div className="text-[14px] font-bold uppercase text-slate-500 tracking-wider flex flex-wrap items-center gap-x-1">
+                      <div className="text-[14px] font-normal uppercase text-slate-500 tracking-wider flex flex-wrap items-center gap-x-1">
                         {editingField === 'carModel' ? (
                           <Input
                             autoFocus
-                            className="h-6 py-0 bg-white/10 border-white/20 text-white text-[13px] w-32"
+                            className="h-6 py-0 bg-white/10 border-white/20 text-white text-[13px] w-32 font-bold"
                             value={selectedSale.carModel}
                             onChange={(e) => setSelectedSale(prev => prev ? ({ ...prev, carModel: e.target.value }) : null)}
                             onBlur={() => setEditingField(null)}
@@ -659,7 +783,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                             onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                           />
                         ) : (
-                          <span className="cursor-pointer hover:bg-white/5 px-1 rounded" onClick={() => setEditingField('carModel')}>
+                          <span className="cursor-pointer hover:bg-white/5 px-1 rounded font-bold" onClick={() => setEditingField('carModel')}>
                             {selectedSale.carModel}
                           </span>
                         )}
@@ -897,6 +1021,10 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                   
                   <div className="bg-white rounded-2xl p-3 ring-1 ring-slate-100">
                     <PaymentProgressChart installments={selectedSale.installments || []} />
+                    <div className="mt-2 text-center">
+                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">Referência da Venda</p>
+                      <p className="text-sm font-bold text-slate-600 uppercase mt-1">{getSaleReferenceDate(selectedSale)}</p>
+                    </div>
                   </div>
                 </div>
               </div>

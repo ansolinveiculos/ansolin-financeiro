@@ -14,11 +14,14 @@ import {
   CalendarDays,
   Activity,
   ChevronRight,
-  Calendar
+  Calendar,
+  Search,
+  X
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { format, isValid } from 'date-fns';
@@ -120,9 +123,8 @@ function GlobalFinanceChart({ recebido, overdue, pendingFuture, paidCount, total
              })}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Geral</p>
           <p className="text-sm font-black text-slate-900 tracking-tighter">
-            {paidCount}/{totalCount}
+            {Math.round(pctRecebido * 100)}%
           </p>
         </div>
       </div>
@@ -178,7 +180,20 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
     const saved = localStorage.getItem('ansolin_recent');
     return saved ? JSON.parse(saved) : [];
   });
+  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const filteredSales = searchTerm.length >= 3 
+    ? recentSales.filter(sale => {
+        const search = searchTerm.toLowerCase();
+        return (
+          sale.customerName?.toLowerCase().includes(search) ||
+          sale.carModel?.toLowerCase().includes(search) ||
+          sale.carPlate?.toLowerCase().includes(search) ||
+          sale.customerPhone?.toLowerCase().includes(search)
+        );
+      })
+    : recentSales;
 
   useEffect(() => {
     async function fetchStats() {
@@ -327,6 +342,15 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
     
     const totalGeral = paidValue + overdueValue + pendingValue;
 
+    const getSaleReferenceDate = () => {
+      if (!installments || installments.length === 0) return new Date(sale.createdAt || new Date());
+      const sorted = [...installments].sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+      const firstDue = new Date(sorted[0].dueDate);
+      const refDate = new Date(firstDue);
+      refDate.setDate(refDate.getDate() - 30);
+      return refDate;
+    };
+
     return { 
       paidCount,
       paidValue,
@@ -334,7 +358,8 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
       overdueValue,
       pendingCount,
       pendingValue,
-      totalGeral: totalGeral || 1
+      totalGeral: totalGeral || 1,
+      referenceDate: getSaleReferenceDate()
     };
   };
 
@@ -372,18 +397,35 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
 
       {/* Recent Sales List (Mobile Style) */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between px-1">
+        <div className="flex flex-col gap-2.5 px-1">
           <h2 className="text-xs font-black uppercase tracking-wider text-slate-400">Parcelamento Direto</h2>
+          <div className="relative group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-slate-900 transition-colors" />
+            <Input 
+              placeholder="Buscar cliente, modelo ou placa..." 
+              className="pl-9 h-10 bg-white border-slate-100 rounded-xl shadow-sm ring-1 ring-slate-100 focus-visible:ring-slate-200 transition-all text-sm"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-50 rounded-lg text-slate-400"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
         </div>
         
         <div className="space-y-4">
-          {recentSales.length === 0 ? (
+          {filteredSales.length === 0 ? (
             <div className="p-8 text-center text-slate-400 italic text-xs bg-white rounded-2xl ring-1 ring-slate-100 shadow-sm">
-              Nenhuma venda registrada ainda.
+              {searchTerm.length >= 3 ? 'Nenhum resultado para sua busca.' : 'Nenhuma venda registrada ainda.'}
             </div>
           ) : (
             <AnimatePresence mode="popLayout">
-              {recentSales.map((sale) => {
+              {filteredSales.map((sale) => {
                 const metrics = getSaleMetrics(sale);
 
                 return (
@@ -409,7 +451,7 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
                                 )}
                             </div>
                             <p className="text-[12px] text-slate-500 font-normal uppercase tracking-tight truncate leading-tight mt-0.5">
-                              {sale.carModel}{sale.carYear ? ` / ${sale.carYear}` : ''}{sale.carColor ? ` / ${sale.carColor}` : ''}
+                              <span className="font-bold">{sale.carModel}</span>{sale.carYear ? ` / ${sale.carYear}` : ''}{sale.carColor ? ` / ${sale.carColor}` : ''}{sale.carPlate ? ` / ${sale.carPlate.toUpperCase()}` : ''}
                             </p>
                           </div>
                           <ChevronRight className="w-4 h-4 text-slate-300 mt-0.5 group-hover:text-slate-900 transition-colors" />
@@ -418,23 +460,23 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
                         <div className="space-y-1.5">
                           <div className={`grid ${metrics.overdueCount > 0 && metrics.pendingCount > 0 ? 'grid-cols-3' : (metrics.overdueCount > 0 || metrics.pendingCount > 0 ? 'grid-cols-2' : 'grid-cols-1')} gap-2`}>
                             <div className="space-y-0 text-left">
-                              <p className="text-[9px] font-black uppercase tracking-wider text-emerald-500">Pagas</p>
-                              <p className="text-[11px] font-black text-slate-900 leading-none">
+                              <p className="text-[9px] font-normal uppercase tracking-wider text-emerald-500">Pagas</p>
+                              <p className="text-[11px] font-normal text-slate-900 leading-none">
                                 {metrics.paidCount} = {metrics.paidValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </p>
                             </div>
                             {metrics.overdueCount > 0 && (
                               <div className={`space-y-0 ${metrics.pendingCount > 0 ? 'text-center' : 'text-right'}`}>
-                                <p className="text-[9px] font-black uppercase tracking-wider text-rose-500">Em Atraso</p>
-                                <p className="text-[11px] font-black text-slate-900 leading-none">
+                                <p className="text-[9px] font-normal uppercase tracking-wider text-rose-500">Em Atraso</p>
+                                <p className="text-[11px] font-normal text-slate-900 leading-none">
                                   {metrics.overdueCount} = {metrics.overdueValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </p>
                               </div>
                             )}
                             {metrics.pendingCount > 0 && (
                               <div className="space-y-0 text-right">
-                                <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">A Vencer</p>
-                                <p className="text-[11px] font-black text-slate-900 leading-none">
+                                <p className="text-[9px] font-normal uppercase tracking-wider text-slate-400">A Vencer</p>
+                                <p className="text-[11px] font-normal text-slate-900 leading-none">
                                   {metrics.pendingCount} = {metrics.pendingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </p>
                               </div>
@@ -465,9 +507,9 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
                         </div>
 
                         <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold border-t border-slate-50 pt-1.5">
-                          <span className="flex items-center gap-1">
+                          <span className="flex items-center gap-1 uppercase">
                             <Calendar className="w-3 h-3" />
-                            {safeFormat(sale.createdAt, 'dd/MM/yy')}
+                            {safeFormat(metrics.referenceDate, 'MMMM/yyyy', { locale: ptBR })}
                           </span>
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-200">
                             {sale.installmentCount}X PARCELAS
