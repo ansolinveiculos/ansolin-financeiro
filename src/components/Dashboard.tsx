@@ -339,7 +339,7 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
       {/* Recent Sales List (Mobile Style) */}
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
-          <h2 className="text-xs font-black uppercase tracking-wider text-slate-400">Últimos Lançamentos</h2>
+          <h2 className="text-xs font-black uppercase tracking-wider text-slate-400">Parcelamento Direto</h2>
         </div>
         
         <div className="space-y-4">

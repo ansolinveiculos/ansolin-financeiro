@@ -420,25 +420,45 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
               <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
                 <div className="space-y-1">
                   <Label htmlFor="carPrice" className="text-[10px] uppercase font-bold text-slate-400">Valor da Venda</Label>
-                  <Input 
+                  <IMaskInput 
+                    mask="R$ num"
+                    blocks={{
+                      num: {
+                        mask: Number,
+                        thousandsSeparator: '.',
+                        padFractionalZeros: true,
+                        radix: ',',
+                        mapToRadix: ['.']
+                      }
+                    }}
+                    unmask={true}
                     id="carPrice"
-                    type="number"
                     required
-                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white font-bold text-base rounded-xl"
+                    className="flex h-10 w-full bg-slate-50/50 border border-slate-200 focus:bg-white font-bold text-base rounded-xl px-3 py-2 ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     placeholder="R$ 0,00"
-                    value={formData.carPrice || ''}
-                    onChange={e => updateField('carPrice', parseFloat(e.target.value))}
+                    value={String(formData.carPrice || '')}
+                    onAccept={(value, mask) => updateField('carPrice', parseFloat(mask.unmaskedValue) || 0)}
                   />
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="downPayment" className="text-[10px] uppercase font-bold text-slate-400">Entrada</Label>
-                  <Input 
+                  <IMaskInput 
+                    mask="R$ num"
+                    blocks={{
+                      num: {
+                        mask: Number,
+                        thousandsSeparator: '.',
+                        padFractionalZeros: true,
+                        radix: ',',
+                        mapToRadix: ['.']
+                      }
+                    }}
+                    unmask={true}
                     id="downPayment"
-                    type="number"
-                    className="h-10 bg-slate-50/50 border-slate-200 focus:bg-white text-base rounded-xl"
+                    className="flex h-10 w-full bg-slate-50/50 border border-slate-200 focus:bg-white text-base rounded-xl px-3 py-2 ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     placeholder="R$ 0,00"
-                    value={formData.downPayment || ''}
-                    onChange={e => updateField('downPayment', parseFloat(e.target.value))}
+                    value={String(formData.downPayment || '')}
+                    onAccept={(value, mask) => updateField('downPayment', parseFloat(mask.unmaskedValue) || 0)}
                   />
                 </div>
               </div>
@@ -517,16 +537,26 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
                   <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Parcela Mensal</p>
                   {isEditingInstallment ? (
                     <div className="flex items-center gap-1">
-                      <span className="text-xl font-black text-white">R$</span>
-                      <Input 
+                      <IMaskInput 
+                        mask="R$ num"
+                        blocks={{
+                          num: {
+                            mask: Number,
+                            thousandsSeparator: '.',
+                            padFractionalZeros: true,
+                            radix: ',',
+                            mapToRadix: ['.']
+                          }
+                        }}
+                        unmask={true}
                         autoFocus
-                        type="number"
-                        step="0.01"
-                        className="h-8 w-28 bg-white/10 border-white/20 text-white font-black text-xl p-1 focus:bg-white/20"
-                        value={formData.manualInstallment || financingDetails.installment.toFixed(2)}
-                        onChange={e => updateField('manualInstallment', parseFloat(e.target.value))}
+                        className="h-9 w-36 bg-white/10 border border-white/20 rounded-lg text-white font-black text-xl p-2 focus:bg-white/20 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        value={String(formData.manualInstallment || financingDetails.installment)}
+                        onAccept={(value, mask) => updateField('manualInstallment', parseFloat(mask.unmaskedValue) || 0)}
                         onBlur={() => setIsEditingInstallment(false)}
-                        onKeyDown={e => e.key === 'Enter' && setIsEditingInstallment(false)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') setIsEditingInstallment(false);
+                        }}
                       />
                     </div>
                   ) : (

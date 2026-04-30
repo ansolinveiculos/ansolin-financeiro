@@ -71,7 +71,9 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
   const [isEditingValorParcelado, setIsEditingValorParcelado] = useState(false);
   const [showSaldoFinal, setShowSaldoFinal] = useState(false);
   const [selectedSale, setSelectedSale] = useState<Proposal | null>(null);
+  const [editingField, setEditingField] = useState<string | null>(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
   const [paymentDialog, setPaymentDialog] = useState<{
     isOpen: boolean;
     saleId: string | null;
@@ -293,7 +295,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
     }
   };
 
-  const updateInstallmentField = async (saleId: string, installmentId: string, field: keyof Installment, value: any) => {
+  const updateInstallmentField = (saleId: string, installmentId: string, field: keyof Installment, value: any) => {
     const sale = proposals.find(p => p.id === saleId);
     if (!sale || !sale.installments) return;
 
@@ -329,24 +331,68 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
       }
     }
 
-    // Update locally
+    // Update locally ONLY
     const updatedProposal = { ...sale, installments: updatedInstallments };
-    const newProposals = proposals.map(p => p.id === saleId ? updatedProposal : p);
-    setProposals(newProposals);
-    localStorage.setItem('ansolin_proposals', JSON.stringify(newProposals));
-    
-    if (selectedSale?.id === saleId) setSelectedSale(updatedProposal);
+    if (selectedSale?.id === saleId) {
+      setSelectedSale(updatedProposal);
+      setHasChanges(true);
+    }
+  };
 
+  useEffect(() => {
+    setHasChanges(false);
+  }, [selectedSale?.id]);
+
+  const saveProposalChanges = async () => {
+    if (!selectedSale) return;
+    
     try {
+      setLoading(true);
+      const saleId = selectedSale.id;
+      const updatedInstallments = selectedSale.installments || [];
+      
+      const newProposals = proposals.map(p => p.id === saleId ? selectedSale : p);
+      setProposals(newProposals);
+      localStorage.setItem('ansolin_proposals', JSON.stringify(newProposals));
+
+      // Remove undefined values for Firestore
+      const sanitizedInstallments = updatedInstallments.map(inst => 
+        Object.fromEntries(Object.entries(inst).filter(([_, v]) => v !== undefined))
+      );
+      
+      const summary = newProposals.reduce((acc: any, curr: any) => {
+        acc.totalVendido += (curr.carPrice || 0);
+        acc.recebido += (curr.downPayment || 0);
+        acc.count++;
+        if (curr.installments) {
+          curr.installments.forEach((inst: Installment) => {
+            if (inst.status === 'paid') acc.recebido += (inst.paidAmount || inst.value || 0);
+            else acc.aReceber += (inst.value || 0);
+          });
+        }
+        return acc;
+      }, { recebido: 0, aReceber: 0, totalVendido: 0, count: 0 });
+      localStorage.setItem('ansolin_stats', JSON.stringify(summary));
+
       const docRef = doc(db, 'proposals', saleId);
       await updateDoc(docRef, {
-        installments: updatedInstallments,
+        customerName: selectedSale.customerName,
+        customerPhone: selectedSale.customerPhone || '',
+        carModel: selectedSale.carModel,
+        carYear: Number(selectedSale.carYear),
+        carColor: selectedSale.carColor || '',
+        carPlate: selectedSale.carPlate || '',
+        installments: sanitizedInstallments,
         updatedAt: serverTimestamp()
       });
+      
+      setHasChanges(false);
+      toast.success('Alterações salvas com sucesso!');
     } catch (error) {
-      console.error('Error updating installment field:', error);
-      toast.error('Erro ao salvar alteração.');
-      fetchProposals(true); 
+      console.error('Error saving proposal changes:', error);
+      toast.error('Erro ao salvar alterações.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -426,97 +472,36 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
     
     const total = installments.length;
     const paid = installments.filter(i => i.status === 'paid').length;
-    
-    const size = 100;
-    const strokeWidth = 10; // Adjusted for smaller size
-    const radius = (size - strokeWidth) / 2;
-    
-    // Calculate segments
-    const segmentAngle = 360 / total;
-    const gap = 0; // No gap in calculation, separators will be lines
+    const today = new Date();
+    today.setHours(0,0,0,0);
     
     return (
-      <div className="relative flex items-center justify-center w-[100px] h-[100px] bg-white/5 rounded-full p-1 border border-white/5 shadow-inner shrink-0">
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="transform -rotate-90">
+      <div className="w-full space-y-1.5">
+        <div className="flex w-full h-3 rounded-full overflow-hidden bg-slate-100 ring-1 ring-white shadow-inner">
           {installments.map((inst, index) => {
-            const startAngle = index * segmentAngle;
-            const endAngle = (index + 1) * segmentAngle;
-            
             const isPaid = inst.status === 'paid';
             const dueDate = new Date(inst.dueDate);
             dueDate.setHours(0,0,0,0);
-            const today = new Date();
-            today.setHours(0,0,0,0);
             const isOverdue = !isPaid && dueDate < today;
 
-            let strokeColor = "#e2e8f0"; 
-            if (isPaid) strokeColor = "#84cc16"; 
-            else if (isOverdue) strokeColor = "#f43f5e"; 
-
-            const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
-              const angleInRadians = (angleInDegrees * Math.PI) / 180.0;
-              return {
-                x: centerX + radius * Math.cos(angleInRadians),
-                y: centerY + radius * Math.sin(angleInRadians)
-              };
-            };
-
-            const start = polarToCartesian(size/2, size/2, radius, startAngle);
-            const end = polarToCartesian(size/2, size/2, radius, endAngle);
-            const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
-
-            const d = [
-              "M", start.x, start.y, 
-              "A", radius, radius, 0, largeArcFlag, 1, end.x, end.y
-            ].join(" ");
+            let bgColor = "bg-slate-200"; 
+            if (isPaid) bgColor = "bg-emerald-500"; 
+            else if (isOverdue) bgColor = "bg-rose-500"; 
 
             return (
-              <g key={`segment-group-${inst.id}`}>
-                {/* Segmento Colorido com pontas retas */}
-                <path
-                  d={d}
-                  fill="none"
-                  stroke={strokeColor}
-                  strokeWidth={strokeWidth}
-                  strokeLinecap="butt"
-                  className="transition-all duration-500 ease-out"
-                />
-              </g>
-            );
-          })}
-
-          {/* Divisores brancos finos e retos entre as parcelas */}
-          {total > 1 && installments.map((_, index) => {
-            const angle = index * segmentAngle;
-            const innerRadius = radius - strokeWidth / 2;
-            const outerRadius = radius + strokeWidth / 2;
-            
-            const polarToCartesian = (centerX: number, centerY: number, rad: number, angleInDegrees: number) => {
-              const angleInRadians = (angleInDegrees * Math.PI) / 180.0;
-              return {
-                x: centerX + rad * Math.cos(angleInRadians),
-                y: centerY + rad * Math.sin(angleInRadians)
-              };
-            };
-            
-            const p1 = polarToCartesian(size/2, size/2, innerRadius, angle);
-            const p2 = polarToCartesian(size/2, size/2, outerRadius, angle);
-            
-            return (
-              <line
-                key={`divider-${index}`}
-                x1={p1.x}
-                y1={p1.y}
-                x2={p2.x}
-                y2={p2.y}
-                stroke="white"
-                strokeWidth="1.5"
+              <div 
+                key={inst.id}
+                className={cn("h-full border-r last:border-r-0 border-white transition-all duration-500", bgColor)}
+                style={{ width: `${100 / total}%` }}
               />
             );
           })}
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-[20px] font-black text-white/90 font-mono tracking-tighter">{paid}/{total}</span>
+        </div>
+        <div className="flex justify-between items-center px-1">
+          <span className="text-[10px] font-normal text-slate-500 uppercase tracking-widest">
+            {Math.round((paid / total) * 100)}%
+          </span>
+          <span className="text-[10px] font-normal text-slate-500 uppercase tracking-widest">{paid} / {total} PAGAS</span>
         </div>
       </div>
     );
@@ -565,27 +550,29 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                   >
                     <ChevronRight className="w-5 h-5 rotate-180" />
                   </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-white/50 hover:text-white hover:bg-white/10"
-                    onClick={() => {
-                      setSelectedSale(null);
-                      onBack();
-                    }}
-                  >
-                    <XCircle className="w-5 h-5" />
-                  </Button>
                 </div>
                 <div className="flex flex-col space-y-4">
                   <div className="space-y-3 flex-1 pb-1">
-                    <div>
-                      <p className="text-[14px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Cliente</p>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-black truncate">{selectedSale.customerName}</h2>
-                        <div className="flex items-center gap-2 flex-1 justify-between min-w-0">
-                          {selectedSale.customerPhone && (
-                            <span className="text-xs font-bold text-slate-500 truncate">{selectedSale.customerPhone}</span>
+                    <div className="space-y-1">
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                          {editingField === 'customerName' ? (
+                            <Input
+                              autoFocus
+                              className="h-8 py-0 bg-white/10 border-white/20 text-white font-black text-xl w-full"
+                              value={selectedSale.customerName}
+                              onChange={(e) => setSelectedSale(prev => prev ? ({ ...prev, customerName: e.target.value }) : null)}
+                              onBlur={() => setEditingField(null)}
+                              onFocus={() => setHasChanges(true)}
+                              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                            />
+                          ) : (
+                            <h2 
+                              className="text-xl font-black truncate cursor-pointer hover:bg-white/5 px-1 rounded"
+                              onClick={() => setEditingField('customerName')}
+                            >
+                              {selectedSale.customerName}
+                            </h2>
                           )}
                           {(() => {
                             const insts = selectedSale.installments || [];
@@ -607,115 +594,107 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                             return null;
                           })()}
                         </div>
+                        {selectedSale.customerPhone && (
+                          <div className="mt-1">
+                            {editingField === 'customerPhone' ? (
+                              <Input
+                                autoFocus
+                                className="h-6 py-0 bg-white/10 border-white/20 text-white font-bold text-sm w-40"
+                                value={selectedSale.customerPhone}
+                                onChange={(e) => setSelectedSale(prev => prev ? ({ ...prev, customerPhone: e.target.value }) : null)}
+                                onBlur={() => setEditingField(null)}
+                                onFocus={() => setHasChanges(true)}
+                                onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                              />
+                            ) : (
+                              <span 
+                                className="text-sm font-bold text-slate-500 cursor-pointer hover:bg-white/5 px-1 rounded"
+                                onClick={() => setEditingField('customerPhone')}
+                              >
+                                {selectedSale.customerPhone}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <p className="text-[14px] font-bold uppercase text-slate-500 tracking-wider">
-                        {selectedSale.carModel}, {selectedSale.carYear}, {selectedSale.carColor || 'SEM COR'}
-                      </p>
+                      <div className="text-[14px] font-bold uppercase text-slate-500 tracking-wider flex flex-wrap items-center gap-x-1">
+                        {editingField === 'carModel' ? (
+                          <Input
+                            autoFocus
+                            className="h-6 py-0 bg-white/10 border-white/20 text-white text-[13px] w-32"
+                            value={selectedSale.carModel}
+                            onChange={(e) => setSelectedSale(prev => prev ? ({ ...prev, carModel: e.target.value }) : null)}
+                            onBlur={() => setEditingField(null)}
+                            onFocus={() => setHasChanges(true)}
+                            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                          />
+                        ) : (
+                          <span className="cursor-pointer hover:bg-white/5 px-1 rounded" onClick={() => setEditingField('carModel')}>
+                            {selectedSale.carModel}
+                          </span>
+                        )}
+                        <span>,</span>
+                        {editingField === 'carYear' ? (
+                          <Input
+                            autoFocus
+                            type="number"
+                            className="h-6 py-0 bg-white/10 border-white/20 text-white text-[13px] w-16"
+                            value={selectedSale.carYear}
+                            onChange={(e) => setSelectedSale(prev => prev ? ({ ...prev, carYear: parseInt(e.target.value) || 0 }) : null)}
+                            onBlur={() => setEditingField(null)}
+                            onFocus={() => setHasChanges(true)}
+                            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                          />
+                        ) : (
+                          <span className="cursor-pointer hover:bg-white/5 px-1 rounded" onClick={() => setEditingField('carYear')}>
+                            {selectedSale.carYear}
+                          </span>
+                        )}
+                        <span>,</span>
+                        {editingField === 'carColor' ? (
+                          <Input
+                            autoFocus
+                            className="h-6 py-0 bg-white/10 border-white/20 text-white text-[13px] w-24"
+                            value={selectedSale.carColor || ''}
+                            onChange={(e) => setSelectedSale(prev => prev ? ({ ...prev, carColor: e.target.value }) : null)}
+                            onBlur={() => setEditingField(null)}
+                            onFocus={() => setHasChanges(true)}
+                            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                            placeholder="COR"
+                          />
+                        ) : (
+                          <span className="cursor-pointer hover:bg-white/5 px-1 rounded" onClick={() => setEditingField('carColor')}>
+                            {selectedSale.carColor || 'SEM COR'}
+                          </span>
+                        )}
+                        {editingField === 'carPlate' ? (
+                          <div className="flex items-center gap-1">
+                            <span>-</span>
+                            <Input
+                              autoFocus
+                              className="h-6 py-0 bg-white/10 border-white/20 text-white text-[13px] w-24"
+                              value={selectedSale.carPlate || ''}
+                              onChange={(e) => setSelectedSale(prev => prev ? ({ ...prev, carPlate: e.target.value }) : null)}
+                              onBlur={() => setEditingField(null)}
+                              onFocus={() => setHasChanges(true)}
+                              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                              placeholder="PLACA"
+                            />
+                          </div>
+                        ) : (
+                          <span className="cursor-pointer hover:bg-white/5 px-1 rounded" onClick={() => setEditingField('carPlate')}>
+                            {selectedSale.carPlate ? `- ${selectedSale.carPlate.toUpperCase()}` : '- PLACA'}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     
-                    <div className="space-y-4 pt-1">
-                      <div>
-                        <p className="text-[14px] text-slate-400 font-black uppercase tracking-widest leading-tight">Valor Parcelado</p>
-                        <div className="flex items-center gap-2">
-                          {isEditingValorParcelado ? (
-                              <input 
-                                type="number" 
-                                step="0.01"
-                                autoFocus
-                                value={selectedSale.installmentValue * selectedSale.installmentCount}
-                                className="text-2xl font-black tracking-tighter leading-none pt-0.5 bg-transparent border-b border-white/20 w-32"
-                                onBlur={() => setIsEditingValorParcelado(false)}
-                                onChange={(e) => {
-                                    // TODO: Implement actual update logic: 
-                                    // Maybe update installmentValue = newTotal / installmentCount
-                                    // and then update all installments!
-                                }}
-                              />
-                          ) : (
-                              <p 
-                                className="text-2xl font-black tracking-tighter leading-none pt-0.5 cursor-pointer hover:text-slate-300"
-                                onClick={() => setIsEditingValorParcelado(true)}
-                              >
-                                {(selectedSale.installmentValue * selectedSale.installmentCount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                              </p>
-                          )}
-                          <span className="text-slate-400 font-black text-xl">{selectedSale.installments?.length || 0}X</span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => setShowSaldoFinal(!showSaldoFinal)} className="text-slate-500 hover:text-white">
-                              {showSaldoFinal ? <Eye className="w-4 h-4" /> : <div className="relative"><Eye className="w-4 h-4"/> <div className="absolute top-1/2 left-0 w-full h-[1px] bg-slate-500 transform -rotate-45" /></div>}
-                          </button>
-                          {showSaldoFinal && (
-                            <>
-                              <p className="text-[12px] text-slate-400 font-normal uppercase tracking-widest leading-none m-0">SALDO FINAL</p>
-                              <p className="text-[12px] font-normal tracking-tighter leading-none text-slate-300">
-                                 {(selectedSale.installments?.reduce((acc, i) => acc + (i.value || 0), 0) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                              </p>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-4 border-t border-white/5 pt-3">
-                        <div className="flex-1 grid grid-cols-1 gap-2">
-                          {(() => {
-                            const insts = selectedSale.installments || [];
-                            const today = new Date();
-                            today.setHours(0,0,0,0);
-
-                            const paid = insts.filter(i => i.status === 'paid');
-                            const overdue = insts.filter(i => {
-                              const date = new Date(i.dueDate);
-                              date.setHours(0,0,0,0);
-                              return i.status !== 'paid' && date < today;
-                            });
-                            const pending = insts.filter(i => {
-                              const date = new Date(i.dueDate);
-                              date.setHours(0,0,0,0);
-                              return i.status !== 'paid' && date >= today;
-                            });
-
-                            const sum = (arr: Installment[]) => arr.reduce((acc, curr) => acc + (curr.value || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-
-                            return (
-                              <>
-                                <div className="leading-tight">
-                                  <p className="text-[11px] text-slate-400 font-normal uppercase tracking-widest">Pagas</p>
-                                  <p className="text-[14px] font-black text-emerald-400">
-                                    {paid.length} = {sum(paid)}
-                                  </p>
-                                </div>
-                                {overdue.length > 0 && (
-                                  <div className="leading-tight">
-                                    <p className="text-[11px] text-slate-400 font-normal uppercase tracking-widest">Em Atraso</p>
-                                    <p className="text-[14px] font-black text-rose-400">
-                                      {overdue.length} = {sum(overdue)}
-                                    </p>
-                                  </div>
-                                )}
-                                {pending.length > 0 && (
-                                  <div className="leading-tight">
-                                    <p className="text-[11px] text-slate-400 font-normal uppercase tracking-widest">A Vencer</p>
-                                    <p className="text-[14px] font-black text-slate-300">
-                                      {pending.length} = {sum(pending)}
-                                    </p>
-                                  </div>
-                                )}
-                              </>
-                            );
-                          })()}
-                        </div>
-                        <PaymentProgressChart installments={selectedSale.installments || []} />
-                      </div>
+                      {/* Top section now only has basic car/client info */}
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="px-3 pb-6 pt-5">
+                <div className="px-3 pb-4 pt-5">
                 <h3 className="text-[14px] font-black uppercase tracking-widest text-slate-400 mb-4 px-3">Cronograma de Pagamentos</h3>
                 
                 <div className="bg-white rounded-3xl ring-1 ring-slate-100 overflow-hidden mx-1">
@@ -763,6 +742,9 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                                           }
                                         }
                                       }}
+                                      onKeyDown={(e: React.KeyboardEvent) => {
+                                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                      }}
                                       className="bg-transparent border-none p-0 focus:ring-0 w-20 text-left text-[14px] text-inherit font-medium hover:underline decoration-dotted cursor-pointer"
                                     />
                                   </div>
@@ -770,13 +752,30 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                               </td>
                               <td className="py-2.5">
                                 <div className="flex items-center justify-end pr-4">
-                                  <span className="opacity-40 font-medium scale-90 mr-1">R$</span>
-                                  <input 
-                                    type="number" 
-                                    step="0.01"
-                                    value={inst.value} 
-                                    className="bg-transparent border-none p-0 focus:ring-0 w-16 text-right text-[16px] text-inherit font-medium"
-                                    onChange={(e) => updateInstallmentField(selectedSale.id, inst.id, 'value', Number(e.target.value))}
+                                  <IMaskInput 
+                                    mask="R$ num"
+                                    blocks={{
+                                      num: {
+                                        mask: Number,
+                                        thousandsSeparator: '.',
+                                        padFractionalZeros: true,
+                                        normalizeZeros: true,
+                                        radix: ',',
+                                        mapToRadix: ['.']
+                                      }
+                                    }}
+                                    unmask={true}
+                                    value={String(inst.value)} 
+                                    className="bg-transparent border-none p-0 focus:ring-0 w-28 text-right text-[16px] text-inherit font-medium"
+                                    onAccept={(value, mask) => {
+                                      const numValue = parseFloat(mask.unmaskedValue);
+                                      if (!isNaN(numValue) && numValue !== inst.value) {
+                                        updateInstallmentField(selectedSale.id, inst.id, 'value', numValue);
+                                      }
+                                    }}
+                                    onKeyDown={(e: React.KeyboardEvent) => {
+                                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                    }}
                                   />
                                 </div>
                               </td>
@@ -816,9 +815,135 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                     </table>
                   </div>
                 </div>
+
+                {/* Resumo financeiro compactado em uma linha abaixo da lista */}
+                <div className="mt-6 px-1 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-[12px]">
+                    {(() => {
+                      const insts = selectedSale.installments || [];
+                      const today = new Date();
+                      today.setHours(0,0,0,0);
+
+                      const paid = insts.filter(i => i.status === 'paid');
+                      const overdue = insts.filter(i => {
+                        const date = new Date(i.dueDate);
+                        date.setHours(0,0,0,0);
+                        return i.status !== 'paid' && date < today;
+                      });
+                      const pending = insts.filter(i => {
+                        const date = new Date(i.dueDate);
+                        date.setHours(0,0,0,0);
+                        return i.status !== 'paid' && date >= today;
+                      });
+
+                      const sum = (list: Installment[]) => 
+                        list.reduce((acc, i) => acc + (i.status === 'paid' ? (i.paidAmount || i.value || 0) : (i.value || 0)), 0)
+                          .toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
+                      return (
+                        <>
+                          {paid.length > 0 && (
+                            <div className="flex flex-col gap-0.5 whitespace-nowrap">
+                              <span className="text-slate-400 font-normal uppercase tracking-wider text-[16px]">Pagas</span>
+                              <span className="font-normal text-emerald-600 text-[14px]">{paid.length} - {sum(paid)}</span>
+                            </div>
+                          )}
+                          {overdue.length > 0 && (
+                            <div className="flex flex-col gap-0.5 whitespace-nowrap">
+                              <span className="text-slate-400 font-normal uppercase tracking-wider text-[16px]">Em Atraso</span>
+                              <span className="font-normal text-rose-600 text-[14px]">{overdue.length} - {sum(overdue)}</span>
+                            </div>
+                          )}
+                          {pending.length > 0 && (
+                            <div className="flex flex-col gap-0.5 whitespace-nowrap">
+                              <span className="text-slate-400 font-normal uppercase tracking-wider text-[16px]">A Vencer</span>
+                              <span className="font-normal text-slate-500 text-[14px]">{pending.length} - {sum(pending)}</span>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                  
+                  <div className="bg-white rounded-2xl p-3 ring-1 ring-slate-100">
+                    <PaymentProgressChart installments={selectedSale.installments || []} />
+                  </div>
+                </div>
               </div>
               
-              <div className="px-6 pb-6 pt-2 flex flex-col gap-2">
+                {/* Financial Summary Overlay (Manteve-se na parte inferior) */}
+                <div className="px-4 pb-4 pt-2">
+                   <div className="bg-slate-900 rounded-3xl p-5 text-white shadow-xl ring-1 ring-white/10 space-y-4">
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="flex-1">
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">VALOR PARCELADO</p>
+                          <div className="flex flex-col gap-1">
+                            <IMaskInput 
+                              mask="R$ num"
+                              blocks={{
+                                num: {
+                                  mask: Number,
+                                  thousandsSeparator: '.',
+                                  padFractionalZeros: true,
+                                  normalizeZeros: true,
+                                  radix: ',',
+                                  mapToRadix: ['.']
+                                }
+                              }}
+                              unmask={true}
+                              value={String((selectedSale.installmentValue || 0) * (selectedSale.installmentCount || 0))}
+                              className="text-xl font-black bg-white/5 border border-white/10 rounded-lg px-2 py-1 focus:bg-white/10 focus:border-amber-400/50 focus:outline-none transition-all w-full text-white"
+                              onAccept={(value, mask) => {
+                                const numValue = parseFloat(mask.unmaskedValue);
+                                if (!isNaN(numValue) && numValue !== (selectedSale.installmentValue * selectedSale.installmentCount)) {
+                                  const newVal = numValue / selectedSale.installmentCount;
+                                  setSelectedSale(prev => prev ? ({ ...prev, installmentValue: newVal }) : null);
+                                  setHasChanges(true);
+                                }
+                              }}
+                              onKeyDown={(e: React.KeyboardEvent) => {
+                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                              }}
+                            />
+                            <span className="text-slate-500 font-black text-xs px-1 uppercase tracking-widest">{selectedSale.installments?.length || 0} parcelas</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Saldo Final</p>
+                          <div className="flex items-center gap-2 justify-end">
+                            <button onClick={() => setShowSaldoFinal(!showSaldoFinal)} className="text-slate-500 hover:text-white shrink-0">
+                                {showSaldoFinal ? <Eye className="w-3.5 h-3.5" /> : <div className="relative"><Eye className="w-3.5 h-3.5"/> <div className="absolute top-1/2 left-0 w-full h-[0.5px] bg-slate-500 transform -rotate-45" /></div>}
+                            </button>
+                            <p className={cn("text-lg font-black text-amber-400 transition-all duration-300", !showSaldoFinal && "blur-sm select-none")}>
+                               {(selectedSale.installments?.reduce((acc, i) => acc + (i.value || 0), 0) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                   </div>
+                </div>
+
+                <div className="px-6 pb-6 pt-2 flex flex-col gap-2">
+                <AnimatePresence>
+                  {hasChanges && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="mb-2"
+                    >
+                      <Button 
+                        className="w-full h-12 rounded-2xl font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-200 flex items-center justify-center gap-2 group"
+                        onClick={saveProposalChanges}
+                        disabled={loading}
+                      >
+                        {loading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5 group-hover:scale-110 transition-transform" />}
+                        Salvar Alterações
+                      </Button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 {isConfirmingDelete ? (
                   <div className="flex gap-2 animate-in fade-in zoom-in duration-200">
                     <Button 
@@ -877,16 +1002,27 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
             </div>
             <div className="space-y-1.5">
               <p className="text-[14px] font-black uppercase text-slate-400 tracking-widest leading-none">Valor Pago</p>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
-                <Input 
-                  type="number" 
-                  step="0.01"
-                  value={paymentDialog.paidAmount}
-                  onChange={e => setPaymentDialog(prev => ({ ...prev, paidAmount: Number(e.target.value) }))}
-                  className="h-11 pl-9 rounded-xl bg-slate-50 border-slate-100 font-bold"
-                />
-              </div>
+              <IMaskInput 
+                mask="R$ num"
+                blocks={{
+                  num: {
+                    mask: Number,
+                    thousandsSeparator: '.',
+                    padFractionalZeros: true,
+                    radix: ',',
+                    mapToRadix: ['.']
+                  }
+                }}
+                unmask={true}
+                value={String(paymentDialog.paidAmount)}
+                onAccept={(value, mask) => {
+                  const numValue = parseFloat(mask.unmaskedValue);
+                  if (!isNaN(numValue)) {
+                    setPaymentDialog(prev => ({ ...prev, paidAmount: numValue }));
+                  }
+                }}
+                className="flex h-11 w-full rounded-xl bg-slate-50 border border-slate-100 px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
               <p className="text-[9px] text-slate-400 font-medium">
                 Valor da parcela: {paymentDialog.originalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </p>
