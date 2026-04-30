@@ -235,9 +235,43 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
             return acc;
           }, { recebido: 0, aReceber: 0, overdue: 0, pendingFuture: 0, totalVendido: 0, count: 0, totalInstallments: 0, paidInstallments: 0 });
 
-          // Sort data for recent sales descending
-          const sortedData = [...data].sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime());
-          const recent = sortedData.slice(0, 5);
+          // Sort data for priority: overdue first, fully paid last
+          const sortedData = [...data].sort((a, b) => {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+
+            const getOverdueCount = (sale: any) => {
+              if (!sale.installments) return 0;
+              return sale.installments.filter((i: any) => {
+                const d = new Date(i.dueDate);
+                d.setHours(0,0,0,0);
+                return i.status !== 'paid' && d < today;
+              }).length;
+            };
+
+            const isFullyPaid = (sale: any) => {
+              if (!sale.installments || sale.installments.length === 0) return false;
+              return sale.installments.every((i: any) => i.status === 'paid');
+            };
+
+            const paidA = isFullyPaid(a);
+            const paidB = isFullyPaid(b);
+
+            // Quitados sempre por último
+            if (paidA && !paidB) return 1;
+            if (!paidA && paidB) return -1;
+
+            // Ordenar por quantidade de parcelas em atraso (descendente)
+            const overdueA = getOverdueCount(a);
+            const overdueB = getOverdueCount(b);
+
+            if (overdueA !== overdueB) return overdueB - overdueA;
+
+            // Fallback para data de criação
+            return new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime();
+          });
+
+          const recent = sortedData.slice(0, 10); // Aumentado para 10 para mostrar mais no dashboard
 
           // Only overwrite if we actually got something, or if it's genuinely empty from server
           if (!snapshot.empty || !snapshot.metadata.fromCache) {

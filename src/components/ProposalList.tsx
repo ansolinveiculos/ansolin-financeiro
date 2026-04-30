@@ -118,7 +118,37 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
           };
         });
         
-        const sortedData = data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const sortedData = data.sort((a, b) => {
+          const today = new Date();
+          today.setHours(0,0,0,0);
+
+          const getOverdueCount = (sale: any) => {
+            if (!sale.installments) return 0;
+            return sale.installments.filter((i: any) => {
+              const d = new Date(i.dueDate);
+              d.setHours(0,0,0,0);
+              return i.status !== 'paid' && d < today;
+            }).length;
+          };
+
+          const isFullyPaid = (sale: any) => {
+            if (!sale.installments || sale.installments.length === 0) return false;
+            return sale.installments.every((i: any) => i.status === 'paid');
+          };
+
+          const paidA = isFullyPaid(a);
+          const paidB = isFullyPaid(b);
+
+          if (paidA && !paidB) return 1;
+          if (!paidA && paidB) return -1;
+
+          const overdueA = getOverdueCount(a);
+          const overdueB = getOverdueCount(b);
+
+          if (overdueA !== overdueB) return overdueB - overdueA;
+
+          return new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime();
+        });
 
         if (!snapshot.empty || !snapshot.metadata.fromCache) {
           localStorage.setItem('ansolin_proposals', JSON.stringify(sortedData));
