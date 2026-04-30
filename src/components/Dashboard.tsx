@@ -34,13 +34,14 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger,
   DropdownMenuLabel,
-  DropdownMenuSeparator
+  DropdownMenuSeparator,
+  DropdownMenuGroup
 } from '@/components/ui/dropdown-menu';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import html2canvas from 'html2canvas';
+import * as htmlToImage from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
 const safeFormat = (date: Date | string | number | null | undefined, fmt: string, options?: any) => {
@@ -206,11 +207,23 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
     setExporting(true);
 
     try {
-      const canvas = await html2canvas(exportRef.current, {
-        scale: 2,
-        useCORS: true,
+      // Pequeno delay maior para garantir renderização completa de ícones e fontes
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const node = exportRef.current;
+      
+      // Captura com Pixel Ratio 2 para alta definição (estilo Retina)
+      const dataUrl = await htmlToImage.toPng(node, {
+        quality: 1,
+        pixelRatio: 2,
         backgroundColor: '#F8FAFC',
-        logging: false,
+        cacheBust: true,
+        height: node.scrollHeight,
+        width: node.scrollWidth,
+        style: {
+          transform: 'scale(1)',
+          transformOrigin: 'top left',
+        }
       });
 
       const dateStr = format(new Date(), 'dd-MM-yyyy-HHmm');
@@ -219,15 +232,21 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
       if (type === 'image') {
         const link = document.createElement('a');
         link.download = `${filename}.png`;
-        link.href = canvas.toDataURL('image/png');
+        link.href = dataUrl;
         link.click();
       } else if (type === 'pdf') {
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const imgProps = pdf.getImageProperties(imgData);
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        const img = new Image();
+        img.src = dataUrl;
+        await new Promise(resolve => img.onload = resolve);
+        
+        // No PDF, usamos a proporção original mas ajustamos para uma densidade legível
+        const pdf = new jsPDF({
+          orientation: img.width > img.height ? 'l' : 'p',
+          unit: 'px',
+          format: [img.width / 2, img.height / 2] // Ajustamos para o tamanho real do layout
+        });
+
+        pdf.addImage(dataUrl, 'PNG', 0, 0, img.width / 2, img.height / 2);
         pdf.save(`${filename}.pdf`);
       } else if (type === 'whatsapp' || type === 'email') {
         const summary = `
@@ -455,68 +474,71 @@ Total Vendido: ${stats.totalVendido.toLocaleString('pt-BR', { style: 'currency',
 
         {!exporting && (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button 
-                variant="outline" 
-                size="icon" 
-                className="h-10 w-10 rounded-xl bg-white border-slate-200 text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-all shadow-sm"
-                disabled={exporting}
-              >
-                <Share2 className={cn("w-5 h-5", exporting && "animate-pulse")} />
-              </Button>
+            <DropdownMenuTrigger
+              className={cn(
+                "inline-flex shrink-0 items-center justify-center border bg-white h-10 w-10 rounded-xl border-slate-200 text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-all shadow-sm",
+                exporting && "animate-pulse"
+              )}
+              disabled={exporting}
+            >
+              <Share2 className="w-5 h-5" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2">
-              <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-2 py-1.5">Exportar Relatório</DropdownMenuLabel>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-2 py-1.5">Exportar Relatório</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={() => handleExport('whatsapp')}
+                  className="flex items-center gap-3 px-2 py-2.5 cursor-pointer rounded-xl focus:bg-slate-50"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-green-50 text-green-600 flex items-center justify-center">
+                    <MessageCircle className="w-4 h-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-slate-900">WhatsApp</span>
+                    <span className="text-[10px] text-slate-500">Enviar resumo texto</span>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => handleExport('email')}
+                  className="flex items-center gap-3 px-2 py-2.5 cursor-pointer rounded-xl focus:bg-slate-50"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-slate-900">E-mail</span>
+                    <span className="text-[10px] text-slate-500">Enviar resumo texto</span>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                onClick={() => handleExport('whatsapp')}
-                className="flex items-center gap-3 px-2 py-2.5 cursor-pointer rounded-xl focus:bg-slate-50"
-              >
-                <div className="w-8 h-8 rounded-lg bg-green-50 text-green-600 flex items-center justify-center">
-                  <MessageCircle className="w-4 h-4" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-slate-900">WhatsApp</span>
-                  <span className="text-[10px] text-slate-500">Enviar resumo texto</span>
-                </div>
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => handleExport('email')}
-                className="flex items-center gap-3 px-2 py-2.5 cursor-pointer rounded-xl focus:bg-slate-50"
-              >
-                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <Mail className="w-4 h-4" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-slate-900">E-mail</span>
-                  <span className="text-[10px] text-slate-500">Enviar resumo texto</span>
-                </div>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                onClick={() => handleExport('pdf')}
-                className="flex items-center gap-3 px-2 py-2.5 cursor-pointer rounded-xl focus:bg-slate-50"
-              >
-                <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
-                  <FileText className="w-4 h-4" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-slate-900">Salvar PDF</span>
-                  <span className="text-[10px] text-slate-500">Documento pronto</span>
-                </div>
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => handleExport('image')}
-                className="flex items-center gap-3 px-2 py-2.5 cursor-pointer rounded-xl focus:bg-slate-50"
-              >
-                <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
-                  <ImageIcon className="w-4 h-4" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-slate-900">Salvar Imagem</span>
-                  <span className="text-[10px] text-slate-500">Captura da tela</span>
-                </div>
-              </DropdownMenuItem>
+              <DropdownMenuGroup>
+                <DropdownMenuItem 
+                  onClick={() => handleExport('pdf')}
+                  className="flex items-center gap-3 px-2 py-2.5 cursor-pointer rounded-xl focus:bg-slate-50"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-slate-900">Salvar PDF</span>
+                    <span className="text-[10px] text-slate-500">Documento pronto</span>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => handleExport('image')}
+                  className="flex items-center gap-3 px-2 py-2.5 cursor-pointer rounded-xl focus:bg-slate-50"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                    <ImageIcon className="w-4 h-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-slate-900">Salvar Imagem</span>
+                    <span className="text-[10px] text-slate-500">Captura da tela</span>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
