@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { collection, query, where, getDocs, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Proposal, ProposalStatus, Installment } from '../types';
@@ -16,16 +16,32 @@ import {
   ChevronRight,
   Calendar,
   Search,
-  X
+  X,
+  Share2,
+  Mail,
+  MessageCircle,
+  Download,
+  Image as ImageIcon,
+  FileText
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator
+} from '@/components/ui/dropdown-menu';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 const safeFormat = (date: Date | string | number | null | undefined, fmt: string, options?: any) => {
   if (!date) return 'Data Inválida';
@@ -163,6 +179,7 @@ function GlobalFinanceChart({ recebido, overdue, pendingFuture, paidCount, total
 }
 
 export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: DashboardProps) {
+  const exportRef = useRef<HTMLDivElement>(null);
   const [stats, setStats] = useState(() => {
     const saved = localStorage.getItem('ansolin_stats');
     return saved ? JSON.parse(saved) : {
@@ -182,6 +199,61 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async (type: 'image' | 'pdf' | 'whatsapp' | 'email') => {
+    if (!exportRef.current) return;
+    setExporting(true);
+
+    try {
+      const canvas = await html2canvas(exportRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#F8FAFC',
+        logging: false,
+      });
+
+      const dateStr = format(new Date(), 'dd-MM-yyyy-HHmm');
+      const filename = `relatorio-financeiro-${dateStr}`;
+
+      if (type === 'image') {
+        const link = document.createElement('a');
+        link.download = `${filename}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      } else if (type === 'pdf') {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save(`${filename}.pdf`);
+      } else if (type === 'whatsapp' || type === 'email') {
+        const summary = `
+🚀 *Relatório Financeiro ANSOLIN*
+📅 Data: ${format(new Date(), 'dd/MM/yyyy')}
+
+💰 Recebido: ${stats.recebido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+⚠️ Vencido: ${stats.overdue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+⏳ A Receber: ${stats.pendingFuture.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+✅ Saúde: ${Math.round((stats.recebido / (stats.recebido + stats.overdue + stats.pendingFuture || 1)) * 100)}%
+
+Total Vendido: ${stats.totalVendido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+        `.trim();
+
+        if (type === 'whatsapp') {
+          window.open(`https://wa.me/?text=${encodeURIComponent(summary)}`, '_blank');
+        } else {
+          window.location.href = `mailto:?subject=Relatório Financeiro ANSOLIN&body=${encodeURIComponent(summary)}`;
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const filteredSales = searchTerm.length >= 3 
     ? recentSales.filter(sale => {
@@ -373,155 +445,229 @@ export function Dashboard({ onNewProposal, onViewProposals, onSelectSale }: Dash
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" ref={exportRef}>
       {/* Welcome Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-black text-slate-900 tracking-tight">Painel Financeiro</h1>
-        <p className="text-xs text-slate-500 font-medium">{format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
+      <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl font-black text-slate-900 tracking-tight">Painel Financeiro</h1>
+          <p className="text-xs text-slate-500 font-medium">{format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
+        </div>
+
+        {!exporting && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="h-10 w-10 rounded-xl bg-white border-slate-200 text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-all shadow-sm"
+                disabled={exporting}
+              >
+                <Share2 className={cn("w-5 h-5", exporting && "animate-pulse")} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2">
+              <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-2 py-1.5">Exportar Relatório</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={() => handleExport('whatsapp')}
+                className="flex items-center gap-3 px-2 py-2.5 cursor-pointer rounded-xl focus:bg-slate-50"
+              >
+                <div className="w-8 h-8 rounded-lg bg-green-50 text-green-600 flex items-center justify-center">
+                  <MessageCircle className="w-4 h-4" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-slate-900">WhatsApp</span>
+                  <span className="text-[10px] text-slate-500">Enviar resumo texto</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => handleExport('email')}
+                className="flex items-center gap-3 px-2 py-2.5 cursor-pointer rounded-xl focus:bg-slate-50"
+              >
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-slate-900">E-mail</span>
+                  <span className="text-[10px] text-slate-500">Enviar resumo texto</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={() => handleExport('pdf')}
+                className="flex items-center gap-3 px-2 py-2.5 cursor-pointer rounded-xl focus:bg-slate-50"
+              >
+                <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-slate-900">Salvar PDF</span>
+                  <span className="text-[10px] text-slate-500">Documento pronto</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => handleExport('image')}
+                className="flex items-center gap-3 px-2 py-2.5 cursor-pointer rounded-xl focus:bg-slate-50"
+              >
+                <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                  <ImageIcon className="w-4 h-4" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-slate-900">Salvar Imagem</span>
+                  <span className="text-[10px] text-slate-500">Captura da tela</span>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
-      {/* Global Financial Chart */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <GlobalFinanceChart 
-          recebido={stats.recebido || 0} 
-          overdue={stats.overdue || 0} 
-          pendingFuture={stats.pendingFuture || 0} 
-          paidCount={stats.paidInstallments || 0}
-          totalCount={stats.totalInstallments || 0}
-        />
-      </motion.div>
+      <div id="dashboard-export-area" className="space-y-6">
+        {/* Global Financial Chart */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <GlobalFinanceChart 
+            recebido={stats.recebido || 0} 
+            overdue={stats.overdue || 0} 
+            pendingFuture={stats.pendingFuture || 0} 
+            paidCount={stats.paidInstallments || 0}
+            totalCount={stats.totalInstallments || 0}
+          />
+        </motion.div>
 
-      {/* Recent Sales List (Mobile Style) */}
-      <div className="space-y-3">
-        <div className="flex flex-col gap-2.5 px-1">
-          <h2 className="text-xs font-black uppercase tracking-wider text-slate-400">Parcelamento Direto</h2>
-          <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-slate-900 transition-colors" />
-            <Input 
-              placeholder="Buscar cliente, modelo ou placa..." 
-              className="pl-9 h-10 bg-white border-slate-100 rounded-xl shadow-sm ring-1 ring-slate-100 focus-visible:ring-slate-200 transition-all text-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            {searchTerm && (
-              <button 
-                onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-50 rounded-lg text-slate-400"
-              >
-                <X className="w-3 h-3" />
-              </button>
+        {/* Recent Sales List (Mobile Style) */}
+        <div className="space-y-3">
+          <div className="flex flex-col gap-2.5 px-1">
+            <h2 className="text-xs font-black uppercase tracking-wider text-slate-400">Parcelamento Direto</h2>
+            {!exporting && (
+              <div className="relative group">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-slate-900 transition-colors" />
+                <Input 
+                  placeholder="Buscar cliente, modelo ou placa..." 
+                  className="pl-9 h-10 bg-white border-slate-100 rounded-xl shadow-sm ring-1 ring-slate-100 focus-visible:ring-slate-200 transition-all text-sm"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                {searchTerm && (
+                  <button 
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-50 rounded-lg text-slate-400"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             )}
           </div>
-        </div>
-        
-        <div className="space-y-4">
-          {filteredSales.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 italic text-xs bg-white rounded-2xl ring-1 ring-slate-100 shadow-sm">
-              {searchTerm.length >= 3 ? 'Nenhum resultado para sua busca.' : 'Nenhuma venda registrada ainda.'}
-            </div>
-          ) : (
-            <AnimatePresence mode="popLayout">
-              {filteredSales.map((sale) => {
-                const metrics = getSaleMetrics(sale);
+          
+          <div className="space-y-4">
+            {filteredSales.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 italic text-xs bg-white rounded-2xl ring-1 ring-slate-100 shadow-sm">
+                {searchTerm.length >= 3 ? 'Nenhum resultado para sua busca.' : 'Nenhuma venda registrada ainda.'}
+              </div>
+            ) : (
+              <AnimatePresence mode="popLayout">
+                {filteredSales.map((sale) => {
+                  const metrics = getSaleMetrics(sale);
 
-                return (
-                  <motion.div
-                    key={sale.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    onClick={() => onSelectSale(sale.id)}
-                  >
-                    <Card className="border-none shadow-sm ring-1 ring-slate-100 overflow-hidden bg-white active:scale-[0.98] transition-all cursor-pointer group">
-                      <CardContent className="pt-2 pb-1.5 px-3.5 space-y-2">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-baseline gap-2 overflow-hidden">
-                              <p className="text-[14px] font-black text-slate-900 truncate flex-shrink-0 max-w-[55%]">{sale.customerName}</p>
-                                {sale.customerPhone && (
-                                  <div className="flex items-center gap-1.5 truncate min-w-0">
-                                    <p className="text-[14px] font-normal text-slate-400 truncate tracking-tight">{sale.customerPhone}</p>
-                                    {metrics.overdueCount === 0 && metrics.pendingCount === 0 && sale.installments && sale.installments.length > 0 && (
-                                      <Badge className="bg-emerald-500 text-white border-none text-[14px] h-auto px-2 py-0 font-normal uppercase tracking-tighter ml-auto">Quitado</Badge>
-                                    )}
-                                  </div>
-                                )}
-                            </div>
-                            <p className="text-[12px] text-slate-500 font-normal uppercase tracking-tight truncate leading-tight mt-0.5">
-                              <span className="font-bold">{sale.carModel}</span>{sale.carYear ? ` / ${sale.carYear}` : ''}{sale.carColor ? ` / ${sale.carColor}` : ''}{sale.carPlate ? ` / ${sale.carPlate.toUpperCase()}` : ''}
-                            </p>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-slate-300 mt-0.5 group-hover:text-slate-900 transition-colors" />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <div className={`grid ${metrics.overdueCount > 0 && metrics.pendingCount > 0 ? 'grid-cols-3' : (metrics.overdueCount > 0 || metrics.pendingCount > 0 ? 'grid-cols-2' : 'grid-cols-1')} gap-2`}>
-                            <div className="space-y-0 text-left">
-                              <p className="text-[9px] font-normal uppercase tracking-wider text-emerald-500">Pagas</p>
-                              <p className="text-[11px] font-normal text-slate-900 leading-none">
-                                {metrics.paidCount} = {metrics.paidValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  return (
+                    <motion.div
+                      key={sale.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      onClick={() => !exporting && onSelectSale(sale.id)}
+                    >
+                      <Card className="border-none shadow-sm ring-1 ring-slate-100 overflow-hidden bg-white active:scale-[0.98] transition-all cursor-pointer group">
+                        <CardContent className="pt-2 pb-1.5 px-3.5 space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-baseline gap-2 overflow-hidden">
+                                <p className="text-[14px] font-black text-slate-900 truncate flex-shrink-0 max-w-[55%]">{sale.customerName}</p>
+                                  {sale.customerPhone && (
+                                    <div className="flex items-center gap-1.5 truncate min-w-0">
+                                      <p className="text-[14px] font-normal text-slate-400 truncate tracking-tight">{sale.customerPhone}</p>
+                                      {metrics.overdueCount === 0 && metrics.pendingCount === 0 && sale.installments && sale.installments.length > 0 && (
+                                        <Badge className="bg-emerald-500 text-white border-none text-[14px] h-auto px-2 py-0 font-normal uppercase tracking-tighter ml-auto">Quitado</Badge>
+                                      )}
+                                    </div>
+                                  )}
+                              </div>
+                              <p className="text-[12px] text-slate-500 font-normal uppercase tracking-tight truncate leading-tight mt-0.5">
+                                <span className="font-bold">{sale.carModel}</span>{sale.carYear ? ` / ${sale.carYear}` : ''}{sale.carColor ? ` / ${sale.carColor}` : ''}{sale.carPlate ? ` / ${sale.carPlate.toUpperCase()}` : ''}
                               </p>
                             </div>
-                            {metrics.overdueCount > 0 && (
-                              <div className={`space-y-0 ${metrics.pendingCount > 0 ? 'text-center' : 'text-right'}`}>
-                                <p className="text-[9px] font-normal uppercase tracking-wider text-rose-500">Em Atraso</p>
-                                <p className="text-[11px] font-normal text-slate-900 leading-none">
-                                  {metrics.overdueCount} = {metrics.overdueValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                </p>
-                              </div>
-                            )}
-                            {metrics.pendingCount > 0 && (
-                              <div className="space-y-0 text-right">
-                                <p className="text-[9px] font-normal uppercase tracking-wider text-slate-400">A Vencer</p>
-                                <p className="text-[11px] font-normal text-slate-900 leading-none">
-                                  {metrics.pendingCount} = {metrics.pendingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                </p>
-                              </div>
-                            )}
+                            {!exporting && <ChevronRight className="w-4 h-4 text-slate-300 mt-0.5 group-hover:text-slate-900 transition-colors" />}
                           </div>
 
-                          <div className="h-1.5 bg-slate-100 w-full rounded-full overflow-hidden flex gap-[1px]">
-                            {sale.installments?.sort((a,b) => a.number - b.number).map((inst, idx) => {
-                              const today = new Date();
-                              today.setHours(0,0,0,0);
-                              const dueDate = new Date(inst.dueDate);
-                              dueDate.setHours(0,0,0,0);
-                              
-                              let bgColor = "bg-slate-200";
-                              if (inst.status === 'paid') bgColor = "bg-lime-500";
-                              else if (dueDate < today) bgColor = "bg-rose-500";
+                          <div className="space-y-1.5">
+                            <div className={`grid ${metrics.overdueCount > 0 && metrics.pendingCount > 0 ? 'grid-cols-3' : (metrics.overdueCount > 0 || metrics.pendingCount > 0 ? 'grid-cols-2' : 'grid-cols-1')} gap-2`}>
+                              <div className="space-y-0 text-left">
+                                <p className="text-[9px] font-normal uppercase tracking-wider text-emerald-500">Pagas</p>
+                                <p className="text-[11px] font-normal text-slate-900 leading-none">
+                                  {metrics.paidCount} = {metrics.paidValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                              {metrics.overdueCount > 0 && (
+                                <div className={`space-y-0 ${metrics.pendingCount > 0 ? 'text-center' : 'text-right'}`}>
+                                  <p className="text-[9px] font-normal uppercase tracking-wider text-rose-500">Em Atraso</p>
+                                  <p className="text-[11px] font-normal text-slate-900 leading-none">
+                                    {metrics.overdueCount} = {metrics.overdueValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  </p>
+                                </div>
+                              )}
+                              {metrics.pendingCount > 0 && (
+                                <div className="space-y-0 text-right">
+                                  <p className="text-[9px] font-normal uppercase tracking-wider text-slate-400">A Vencer</p>
+                                  <p className="text-[11px] font-normal text-slate-900 leading-none">
+                                    {metrics.pendingCount} = {metrics.pendingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
 
-                              return (
-                                <motion.div 
-                                  key={inst.id}
-                                  initial={{ width: 0 }}
-                                  animate={{ width: `${(inst.value / metrics.totalGeral) * 100}%` }}
-                                  className={cn("h-full", bgColor, idx < (sale.installments?.length || 0) - 1 && "border-r border-white/30")} 
-                                />
-                              );
-                            })}
+                            <div className="h-1.5 bg-slate-100 w-full rounded-full overflow-hidden flex gap-[1px]">
+                              {sale.installments?.sort((a,b) => a.number - b.number).map((inst, idx) => {
+                                const today = new Date();
+                                today.setHours(0,0,0,0);
+                                const dueDate = new Date(inst.dueDate);
+                                dueDate.setHours(0,0,0,0);
+                                
+                                let bgColor = "bg-slate-200";
+                                if (inst.status === 'paid') bgColor = "bg-lime-500";
+                                else if (dueDate < today) bgColor = "bg-rose-500";
+
+                                return (
+                                  <motion.div 
+                                    key={inst.id}
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${(inst.value / metrics.totalGeral) * 100}%` }}
+                                    className={cn("h-full", bgColor, idx < (sale.installments?.length || 0) - 1 && "border-r border-white/30")} 
+                                  />
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
 
-                        <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold border-t border-slate-50 pt-1.5">
-                          <span className="flex items-center gap-1 uppercase">
-                            <Calendar className="w-3 h-3" />
-                            {safeFormat(metrics.referenceDate, 'MMMM/yyyy', { locale: ptBR })}
-                          </span>
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-200">
-                            {sale.installmentCount}X PARCELAS
-                          </Badge>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          )}
+                          <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold border-t border-slate-50 pt-1.5">
+                            <span className="flex items-center gap-1 uppercase">
+                              <Calendar className="w-3 h-3" />
+                              {safeFormat(metrics.referenceDate, 'MMMM/yyyy', { locale: ptBR })}
+                            </span>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-200">
+                              {sale.installmentCount}X PARCELAS
+                            </Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            )}
+          </div>
         </div>
       </div>
     </div>
