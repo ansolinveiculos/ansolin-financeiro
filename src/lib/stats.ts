@@ -6,7 +6,6 @@ export const calculateStats = (proposals: Proposal[]) => {
 
     return proposals.reduce((acc: any, curr: any) => {
         acc.totalVendido += (curr.carPrice || 0);
-        acc.recebido += (curr.downPayment || 0);
         acc.count++;
 
         if (curr.installments) {

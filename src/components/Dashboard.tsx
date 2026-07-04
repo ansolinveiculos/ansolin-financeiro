@@ -318,7 +318,7 @@ Total Vendido: ${stats.totalVendido.toLocaleString('pt-BR', { style: 'currency',
             };
           });
           
-          const summary = calculateStats(data);
+          const summary = calculateStats(data as any);
 
           // Sort data for priority: overdue first, fully paid last
           const sortedData = [...data].sort((a, b) => {
