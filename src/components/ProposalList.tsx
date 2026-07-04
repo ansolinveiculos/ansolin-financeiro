@@ -11,8 +11,9 @@ import {
   serverTimestamp,
   onSnapshot
 } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType, isAdmin } from '../lib/firebase';
 import { Proposal, ProposalStatus, Installment } from '../types';
+import { calculateStats } from '../lib/stats';
 import { 
   Search, 
   Filter, 
@@ -81,13 +82,15 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
     originalValue: number;
     paidAmount: number;
     paymentDate: string;
+    notes: string;
   }>({
     isOpen: false,
     saleId: null,
     installmentId: null,
     originalValue: 0,
     paidAmount: 0,
-    paymentDate: new Date().toISOString().split('T')[0]
+    paymentDate: new Date().toISOString().split('T')[0],
+    notes: ''
   });
 
   const fetchProposals = async (force = false) => {
@@ -98,10 +101,14 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
     }
 
     try {
-      let q = query(
-        collection(db, 'proposals'),
-        where('userId', '==', auth.currentUser.uid)
-      );
+      const isAdminUser = isAdmin(auth.currentUser);
+      
+      let q = isAdminUser 
+        ? query(collection(db, 'proposals'))
+        : query(
+            collection(db, 'proposals'),
+            where('userId', '==', auth.currentUser.uid)
+          );
       
       const unsubscribe = onSnapshot(q, (snapshot) => {
         if (snapshot.empty && proposals.length > 0 && snapshot.metadata.fromCache) {
@@ -160,7 +167,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
         }
         setLoading(false);
       }, (error) => {
-        console.error('Error fetching proposals:', error);
+        handleFirestoreError(error, OperationType.LIST, 'proposals');
         setLoading(false);
       });
 
@@ -205,7 +212,8 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
         installmentId,
         originalValue: inst.value,
         paidAmount: inst.value,
-        paymentDate: inst.dueDate ? new Date(inst.dueDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+        paymentDate: inst.dueDate ? new Date(inst.dueDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        notes: inst.notes || ''
       });
       return;
     }
@@ -235,6 +243,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
     const paidAt = new Date(paymentDialog.paymentDate + 'T12:00:00').toISOString();
     const paidAmount = paymentDialog.paidAmount;
     const originalValue = paymentDialog.originalValue;
+    const notes = paymentDialog.notes;
 
     let updatedInstallments = [...sale.installments];
     const currentIndex = updatedInstallments.findIndex(i => i.id === paymentDialog.installmentId);
@@ -250,7 +259,8 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
       paidAt,
       paidAmount,
       value: paidAmount, // Atualiza o valor da parcela para o valor pago
-      interest: diff > 0 ? diff : 0
+      interest: diff > 0 ? diff : 0,
+      notes
     };
 
     if (diff < 0) {
@@ -294,19 +304,9 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
     const sanitizedInstallments = updatedInstallments.map(inst => 
       Object.fromEntries(Object.entries(inst).filter(([_, v]) => v !== undefined))
     );
+    console.log('Sanitized Installments:', sanitizedInstallments);
     
-    const summary = newProposals.reduce((acc: any, curr: any) => {
-      acc.totalVendido += (curr.carPrice || 0);
-      acc.recebido += (curr.downPayment || 0);
-      acc.count++;
-      if (curr.installments) {
-        curr.installments.forEach((inst: Installment) => {
-          if (inst.status === 'paid') acc.recebido += (inst.paidAmount || inst.value || 0);
-          else acc.aReceber += (inst.value || 0);
-        });
-      }
-      return acc;
-    }, { recebido: 0, aReceber: 0, totalVendido: 0, count: 0 });
+    const summary = calculateStats(newProposals);
     localStorage.setItem('ansolin_stats', JSON.stringify(summary));
 
     if (selectedSale?.id === saleId) setSelectedSale(updatedProposal);
@@ -319,7 +319,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
       });
       toast.success('Status da parcela atualizado!');
     } catch (error) {
-      console.error('Error updating installment:', error);
+      handleFirestoreError(error, OperationType.UPDATE, `proposals/${saleId}`);
       toast.error('Erro ao salvar alteração.');
       fetchProposals(true);
     }
@@ -390,18 +390,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
         Object.fromEntries(Object.entries(inst).filter(([_, v]) => v !== undefined))
       );
       
-      const summary = newProposals.reduce((acc: any, curr: any) => {
-        acc.totalVendido += (curr.carPrice || 0);
-        acc.recebido += (curr.downPayment || 0);
-        acc.count++;
-        if (curr.installments) {
-          curr.installments.forEach((inst: Installment) => {
-            if (inst.status === 'paid') acc.recebido += (inst.paidAmount || inst.value || 0);
-            else acc.aReceber += (inst.value || 0);
-          });
-        }
-        return acc;
-      }, { recebido: 0, aReceber: 0, totalVendido: 0, count: 0 });
+      const summary = calculateStats(newProposals);
       localStorage.setItem('ansolin_stats', JSON.stringify(summary));
 
       const docRef = doc(db, 'proposals', saleId);
@@ -419,7 +408,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
       setHasChanges(false);
       toast.success('Alterações salvas com sucesso!');
     } catch (error) {
-      console.error('Error saving proposal changes:', error);
+      handleFirestoreError(error, OperationType.UPDATE, `proposals/${selectedSale.id}`);
       toast.error('Erro ao salvar alterações.');
     } finally {
       setLoading(false);
@@ -436,18 +425,7 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
       localStorage.setItem('ansolin_proposals', JSON.stringify(newProposals));
       
       // Update dashboard stats too
-      const summary = newProposals.reduce((acc: any, curr: any) => {
-        acc.totalVendido += (curr.carPrice || 0);
-        acc.recebido += (curr.downPayment || 0);
-        acc.count++;
-        if (curr.installments) {
-          curr.installments.forEach((inst: Installment) => {
-            if (inst.status === 'paid') acc.recebido += (inst.value || 0);
-            else acc.aReceber += (inst.value || 0);
-          });
-        }
-        return acc;
-      }, { recebido: 0, aReceber: 0, totalVendido: 0, count: 0 });
+      const summary = calculateStats(newProposals);
       localStorage.setItem('ansolin_stats', JSON.stringify(summary));
       
       setSelectedSale(null);
@@ -877,31 +855,38 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
                           return (
                             <tr key={inst.id} className={cn("text-[14px] font-normal transition-colors group", rowColor)}>
                               <td className="py-2.5 pl-3 font-bold text-left overflow-hidden">
-                                <div className="flex items-center justify-start gap-2 whitespace-nowrap">
-                                  {String(inst.number).padStart(2, '0')} <span>-</span>
-                                  <div className="relative group/date">
-                                    <IMaskInput 
-                                      mask="00/00/00"
-                                      value={safeFormat(inst.dueDate, 'dd/MM/yy')}
-                                      onAccept={(value) => {
-                                        if (value.length === 8) {
-                                          const [d, m, y] = value.split('/');
-                                          const fullYear = parseInt(y) + 2000;
-                                          const isoDate = `${fullYear}-${m}-${d}T12:00:00.000Z`;
-                                          
-                                          // Only update if it's a valid completion
-                                          const currentFormatted = safeFormat(inst.dueDate, 'dd/MM/yy');
-                                          if (value !== currentFormatted) {
-                                            updateInstallmentField(selectedSale.id, inst.id, 'dueDate', isoDate);
+                                <div className="flex flex-col">
+                                  <div className="flex items-center justify-start gap-2 whitespace-nowrap">
+                                    {String(inst.number).padStart(2, '0')} <span>-</span>
+                                    <div className="relative group/date">
+                                      <IMaskInput 
+                                        mask="00/00/00"
+                                        value={safeFormat(inst.dueDate, 'dd/MM/yy')}
+                                        onAccept={(value) => {
+                                          if (value.length === 8) {
+                                            const [d, m, y] = value.split('/');
+                                            const fullYear = parseInt(y) + 2000;
+                                            const isoDate = `${fullYear}-${m}-${d}T12:00:00.000Z`;
+                                            
+                                            // Only update if it's a valid completion
+                                            const currentFormatted = safeFormat(inst.dueDate, 'dd/MM/yy');
+                                            if (value !== currentFormatted) {
+                                              updateInstallmentField(selectedSale.id, inst.id, 'dueDate', isoDate);
+                                            }
                                           }
-                                        }
-                                      }}
-                                      onKeyDown={(e: React.KeyboardEvent) => {
-                                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                                      }}
-                                      className="bg-transparent border-none p-0 focus:ring-0 w-20 text-left text-[14px] text-inherit font-medium hover:underline decoration-dotted cursor-pointer"
-                                    />
+                                        }}
+                                        onKeyDown={(e: React.KeyboardEvent) => {
+                                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                        }}
+                                        className="bg-transparent border-none p-0 focus:ring-0 w-20 text-left text-[14px] text-inherit font-medium hover:underline decoration-dotted cursor-pointer"
+                                      />
+                                    </div>
                                   </div>
+                                  {inst.notes && (
+                                    <span className="text-[10px] font-normal text-slate-400 italic mt-0.5 truncate max-w-[140px]">
+                                      {inst.notes}
+                                    </span>
+                                  )}
                                 </div>
                               </td>
                               <td className="py-2.5">
@@ -1184,6 +1169,16 @@ export function ProposalList({ onNewProposal, onBack, initialProposalId }: Propo
               <p className="text-[9px] text-slate-400 font-medium">
                 Valor da parcela: {paymentDialog.originalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-[14px] font-black uppercase text-slate-400 tracking-widest leading-none">Observações</p>
+              <textarea
+                value={paymentDialog.notes}
+                onChange={(e) => setPaymentDialog(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Ex: Pago via Pix, em dinheiro, etc..."
+                className="flex min-h-[80px] w-full rounded-xl bg-slate-50 border border-slate-100 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50 resize-none font-medium text-slate-600"
+              />
             </div>
             
             <div className="pt-2 flex flex-col gap-2">

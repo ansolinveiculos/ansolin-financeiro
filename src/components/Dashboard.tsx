@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { collection, query, where, getDocs, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType, isAdmin } from '../lib/firebase';
 import { Proposal, ProposalStatus, Installment } from '../types';
+import { calculateStats } from '../lib/stats';
 import { 
   TrendingUp, 
   Clock, 
@@ -39,7 +40,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
-import { format, isValid } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import * as htmlToImage from 'html-to-image';
 import { jsPDF } from 'jspdf';
@@ -291,10 +292,15 @@ Total Vendido: ${stats.totalVendido.toLocaleString('pt-BR', { style: 'currency',
       if (!auth.currentUser) return;
 
       try {
-        const q = query(
-          collection(db, 'proposals'),
-          where('userId', '==', auth.currentUser.uid)
-        );
+        const isAdminUser = isAdmin(auth.currentUser);
+        
+        const q = isAdminUser 
+          ? query(collection(db, 'proposals'))
+          : query(
+              collection(db, 'proposals'),
+              where('userId', '==', auth.currentUser.uid),
+              orderBy('createdAt', 'desc')
+            );
         
         const unsubscribeStats = onSnapshot(q, (snapshot) => {
           if (snapshot.empty && stats.count > 0 && snapshot.metadata.fromCache) {
@@ -312,34 +318,7 @@ Total Vendido: ${stats.totalVendido.toLocaleString('pt-BR', { style: 'currency',
             };
           });
           
-          const summary = data.reduce((acc, curr: any) => {
-            acc.totalVendido += (curr.carPrice || 0);
-            acc.count++;
-            
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
-            if (curr.installments) {
-              curr.installments.forEach((inst: Installment) => {
-                acc.totalInstallments++;
-                const dueDate = new Date(inst.dueDate);
-                dueDate.setHours(0, 0, 0, 0);
-
-                if (inst.status === 'paid') {
-                  acc.recebido += (inst.value || 0);
-                  acc.paidInstallments++;
-                } else {
-                  if (dueDate < today) {
-                    acc.overdue += (inst.value || 0);
-                  } else {
-                    acc.pendingFuture += (inst.value || 0);
-                  }
-                  acc.aReceber += (inst.value || 0);
-                }
-              });
-            }
-            return acc;
-          }, { recebido: 0, aReceber: 0, overdue: 0, pendingFuture: 0, totalVendido: 0, count: 0, totalInstallments: 0, paidInstallments: 0 });
+          const summary = calculateStats(data);
 
           // Sort data for priority: overdue first, fully paid last
           const sortedData = [...data].sort((a, b) => {
@@ -388,7 +367,7 @@ Total Vendido: ${stats.totalVendido.toLocaleString('pt-BR', { style: 'currency',
           }
           setLoading(false);
         }, (error) => {
-          console.error('Error in stats snapshot:', error);
+          handleFirestoreError(error, OperationType.GET, 'proposals');
           setLoading(false);
         });
 

@@ -8,8 +8,12 @@
         "id": { "type": "string" },
         "customerId": { "type": "string" },
         "customerName": { "type": "string" },
+        "customerCpf": { "type": "string" },
+        "customerPhone": { "type": "string" },
         "carModel": { "type": "string" },
         "carYear": { "type": "integer" },
+        "carPlate": { "type": "string" },
+        "carColor": { "type": "string" },
         "carPrice": { "type": "number" },
         "downPayment": { "type": "number" },
         "installmentCount": { "type": "integer" },
@@ -19,12 +23,17 @@
           "type": "string",
           "enum": ["draft", "pending", "approved", "rejected", "completed"]
         },
+        "installments": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "firstDueDate": { "type": "string" },
         "notes": { "type": "string" },
         "userId": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["customerId", "carModel", "carPrice", "downPayment", "status", "userId", "createdAt", "updatedAt"]
+      "required": ["customerId", "customerName", "carModel", "carPrice", "downPayment", "status", "userId"]
     },
     "Customer": {
       "title": "Customer",

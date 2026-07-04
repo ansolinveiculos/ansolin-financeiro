@@ -15,6 +15,7 @@ export interface Installment {
   interest?: number;
   value: number;
   status: 'pending' | 'paid';
+  notes?: string;
 }
 
 export interface Customer {

@@ -208,41 +208,27 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
         })),
         status,
         userId: auth.currentUser.uid,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       };
 
       console.log('Payload sanitizado: ', payload);
 
       const newDocRef = doc(collection(db, path));
       
-      // Tentamos aguardar até 4 segundos para ver se o salvamento é imediato
-      const timeoutPromise = new Promise((resolve, reject) => {
-        setTimeout(() => resolve('TIMEOUT'), 4000);
-      });
-
-      const writePromise = setDoc(newDocRef, payload).catch(err => {
-        console.error('Erro de background Firestore:', err);
-        throw err;
-      });
-
-      const result = await Promise.race([
-        writePromise.then(() => 'DONE'),
-        timeoutPromise
-      ]);
+      await setDoc(newDocRef, payload);
       
       clearTimeout(timeout);
-
-      if (result === 'TIMEOUT') {
-        toast.success('Venda salva localmente! Sincronizando em segundo plano...');
-      } else {
-        console.log('Documento salvo com sucesso! ID: ', newDocRef.id);
-        toast.success('Venda registrada com sucesso!');
-      }
+      toast.success('Venda registrada com sucesso!');
       
       // Update local cache completely so offline mode works perfectly
       const cachedProposals = JSON.parse(localStorage.getItem('ansolin_proposals') || '[]');
-      const proposalWithId = { id: newDocRef.id, ...payload };
+      const proposalWithId = { 
+        ...payload, 
+        id: newDocRef.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
       const newProposalsCache = [proposalWithId, ...cachedProposals];
       localStorage.setItem('ansolin_proposals', JSON.stringify(newProposalsCache));
       
@@ -268,14 +254,8 @@ export function ProposalForm({ onSuccess, onCancel }: ProposalFormProps) {
       }, 800);
     } catch (error: any) {
       clearTimeout(timeout);
-      console.error('CRITICAL: Error saving proposal:', error);
-      
-      if (error.message === 'TIMEOUT_FIRESTORE') {
-        const isOnline = navigator.onLine;
-        toast.error(`Falha ao conectar com o servidor${!isOnline ? ' (sem internet)' : ''}. O seu navegador ou rede bloqueou a conexão com o banco de dados. Tente usar uma Aba Anônima ou outra rede.`);
-      } else {
-        toast.error('Erro ao salvar venda: ' + (error.message || 'Verifique sua conexão.'));
-      }
+      handleFirestoreError(error, OperationType.CREATE, path);
+    } finally {
       setLoading(false);
     }
   };
